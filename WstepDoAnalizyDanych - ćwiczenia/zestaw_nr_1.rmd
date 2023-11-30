@@ -1,0 +1,686 @@
+---
+title: "Zestaw zadań nr 1"
+author: "Wiktor Kostera"
+date: "2023-10-10"
+
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    highlight: tango
+    toc_float: true
+---
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 450px;
+}
+```
+
+## Zadanie 1
+
+Celem pierwszego zadania było stworzenie dwóch wektorów i wykonanie na nich podstawowych operacji.
+
+```{r}
+pierwsza <- c(1, 2, 3, 4, 5, 6, 7, 8)
+druga <- c(9, 1, 1, 2, 3, 4, 5, 6)
+```
+
+Następnie utworzone wektory możemy wywołać.
+
+```{r}
+pierwsza
+druga
+```
+
+Kolejnym elementem było policzenie sumy, różnicy oraz dodanie do pierwszego wektora wartości 1.
+
+```{r}
+suma <- pierwsza + druga
+suma
+roznica <- pierwsza - druga
+roznica
+wiecej <- pierwsza + 1
+wiecej
+```
+
+Następnie należało wyznaczyć średnią oraz odchylenie standardowe.
+
+```{r}
+mean(pierwsza)
+sd(pierwsza)
+```
+
+## Zadanie 2
+
+Drugie zadanie zostało poświęcone wprowadzeniu ramki danych `osoby` dla siedmiu obserwacji o wartościach `waga` oraz `wzrost`.
+
+```{r}
+wzrost <- c(175, 180, 168, 185, 170, 190, 163)
+waga <- c(98, 76, 58, 90, 64, 80, 58)
+osoby <- data.frame(wzrost, waga)
+osoby
+```
+
+Następnie z wykorzystaniem kilku funkcji można przeprowadzić podstawową inspekcję wprowadzonych danych.
+
+```{r}
+str(osoby)
+head(osoby)
+tail(osoby)
+dim(osoby)
+summary(osoby)
+```
+
+## Zadanie 3
+
+W kolejnym zadaniu dla danych z poprzedniego przykładu należało dodać nazwy wierszy.
+
+```{r}
+rownames(osoby) <- c("Michał", "Jacek", "Ola", "Dawid", "Weronika", "Wiktor", "Ewa")
+osoby
+```
+
+Kolejnym elementem było stworzenie obiektu `BMI`, wyświetlenie osób o BMI wyższym niż 30, a także zliczenie osób o BMI ≤ 25.
+
+```{r}
+BMI <- waga/(wzrost/100)^2
+osoby <- data.frame(wzrost, waga, BMI)
+osoby
+
+osoby[osoby$BMI > 30,]
+
+sum(osoby$BMI <= 25)
+```
+
+## Zadanie 4
+
+Zadanie 4. zostało poświęcone ramkom danych `mtcars` oraz `Orange`. Pierwsza z nich to ramka danych opisująca zużycie paliwa i 10 aspektów konstrukcyjnych dla 32 samochodów z lat 1973-1974. Z kolei druga opisuje dane dotyczące drzew pomarańczy. Poniższy fragment kodu pokazuje oba zestawy danych. 
+
+```{r}
+mtcars
+Orange
+```
+
+Przy użyciu funkcji `str()` możemy poznać ich strukturę.
+
+```{r}
+str(mtcars)
+str(Orange)
+```
+
+Dalsza część zadania jest poświęcona poszczególnym operacjom na tych zestawach. Poniższe linie kodu umożliwiają przedstawienie aut posiadających 6 cylindrów oraz policzenie średniej liczby koni mechanicznych dla aut o spalaniu mniejszym niż 20.
+
+```{r}
+mtcars[mtcars$cyl == 6,] 
+mean(mtcars[mtcars$mpg < 20,]$hp)
+```
+
+Na sam koniec należało zbudować histogram dla jednej wybranej zmiennej z zestawu `Orange` oraz narysowanie wykresy pudełkowego dla zmiennych `mpg`, `hp` i `qsec` z zestawu `mtcars`. Z uwagi na dużą różnicę w ich wartościach postanowiłem podzielić wykres pudełkowy na dwa osobne: jeden prezentujący dane dla zmiennej `hp` oraz drugi dla danych `mpg` oraz `qsec`.
+
+```{r}
+hist(Orange$age, main = "Drzewa pomaranczy", 
+     xlab = "Wiek w dniach", 
+     ylab = "Występowanie")
+
+
+boxplot(data.frame("mpg"= mtcars$mpg, "qsec" = mtcars$qsec), 
+        main = "Wykres pudełkowy dla zmiennych mpg i qsec") 
+
+boxplot(mtcars$hp, 
+        main = "Wykres pudełkowy dla koni mechanicznych",
+        xlab = "hp")
+```
+
+## Zadanie 5
+
+Początek zadania piątego polega na instalacji oraz wczytaniu pakietu `psych`. Następnie należało porównać różnicę pomiędzy funkcją `summary()`, a `describeBy` na przykładzie zestawu `mtcars`.
+
+```{r}
+library("psych")
+
+describe(mtcars)
+summary(mtcars)
+```
+
+Jak widać różnica pomiędzy nimi jest taka, że `describe()` pokazuje więcej statystyk dla danych wyświetlanych w wierszach w odróżnieniu do kilku mniej szczegółowych wartości wyświetlanych w grupach przy użyciu funkcji `summary()`.
+
+Następnie zadanie polegało na zapoznaniu się z funkcją `describeBy()`. Jest to funkcja pozwalająca na wyświetlanie statystyk dla poszczególnych zmiennych i ich grupowaniu. W poniższym przykładzie grupuje po ilości cylindrów silnika dzięki czemu możemy porównac jak zachowują się dane statystyczne dla poszczególnych wartości cylindrów: 4, 6, 8.
+
+```{r}
+describeBy(mtcars, "cyl")
+```
+
+## Zadanie 6
+
+Kolejne zadanie poświęcone jest danym wylosowanym przez poszczególne funkcje. Na początku należało wygenerować 20 wyników rzutu kostką do gry oraz nazwać tę zmienną `proba`. Następnie trzeba było odpowiedzieć na pytanie: ile wynosi średnia i odchylenie standardowe?
+
+```{r}
+proba <- sample(1:6, 20, replace = TRUE)
+proba
+
+mean(proba)
+sd(proba)
+```
+
+Elementem zadania było również wygenerowanie 100 rzutów monetą, przypisanie ich do zmiennej `rzut` oraz udzielenie odpowiedzi na pytanie: ile wypadło orłów?
+
+```{r}
+rzut <- sample(0:1, 100, replace = TRUE)
+sum(rzut)
+```
+
+Należało również wylosować bez zwracania 10 liczb ze zbioru liczb naturalnych od 1 do 100, a także zapoznanie się z trzema funkcjami: `rnorm()`, `rpois()` oraz `rt()` i przestawienie użycia jednej z nich na wybranym przykładzie.
+
+```{r}
+bez_zwracania <- sample(1:100, 10, replace = FALSE)
+bez_zwracania
+
+x1 <- rnorm(10, mean = 12, sd = 3)
+x1
+```
+
+Powyższa funkcja losuje 10 wartości w oparciu o rozkład, w którym średnia wynosi 10 oraz odchylenie standardowe jest równe 3.
+
+## Zadanie 7
+
+W zadaniu siódmym należało stworzyć listę w oparciu o podaną instrukcję.
+
+```{r}
+lista <- list(palenie = c(F,T,T,F,F,T,F),
+              cyfry = 0:9,
+              macierz = matrix(sample(1:5,16,replace = T),4,4),
+              tekst = c("Litwo", "ojczyzno", "moja", "ty",
+                         "jestes", "jak", "zdrowie"))
+lista
+```
+
+Kolejnym etapem było odwołanie się do:
+
+- obiektu `tekst`,
+```{r}
+lista[[4]]
+lista[["tekst"]]
+```
+
+- trzeciego elementu wektora `cyfry`,
+
+```{r}
+lista$cyfry[3]
+```
+
+- trzeciej kolumny obiektu `macierz`.
+
+```{r}
+lista$macierz[, 3]
+```
+
+## Zadanie 8
+
+Zadanie ósme polegało na zdefiniowaniu zmiennej `wiek` i `waga`. Są to zmienne opisujące osoby o danej wadze i danym wieku. Kolejnym etapem było zbudowanie z nich ramki danych `pacjenci`, a następnie wykluczenie z zestawu osoby o wadze > 90 kg.
+
+```{r}
+wiek <- c(50, 17, 39, 27, 90)
+waga <- c(80, 75, 92, 105, 60)
+
+pacjenci <- data.frame(wiek, waga)
+pacjenci
+
+pacjenci <- pacjenci[pacjenci$waga <= 90,]
+pacjenci
+```
+
+## Zadanie 9 
+
+W zadaniu dziewiątym należało zainstalować i wczytać zestaw `nycflights13` oraz zgodnie z instrukcją  zbudować model regresji.
+
+```{r}
+library(nycflights13)
+
+flight_lm <- lm(arr_delay ~ dep_delay + month + carrier, 
+                data = flights)
+```
+
+Następnie należało odpowiedzieć na poszczególne pytania: 
+
+- ile różnych pozycji znajduje się na tej liście,
+
+```{r}
+ile_pozycji <- length(flight_lm)
+ile_pozycji
+```
+
+- jak nazywają się te elementy listy,
+
+```{r}
+nazwy <- names(flight_lm)
+nazwy
+```
+
+- wyświetl współczynniki tego modelu.
+
+```{r}
+wspolczynniki <- coefficients(flight_lm)
+wspolczynniki
+```
+
+## Zadanie 10
+
+W kolejnym zadaniu należało wczytać macierz `VADeaths`, przedstawiającej dane dotyczące śmierci mężczyzn/kobiet ze wsi/miasta na 1000 osób z podziałem na różne grupy wiekowe. Następnie należało zmienić nazwy etykiet na polskie.
+
+```{r}
+VADeaths
+colnames(VADeaths) <- c("M - wieś", "K - wieś", "M - miasto", "K - miasto")
+VADeaths
+```
+
+Kolejnym krokiem było podzielenie macierzy na dwie reprezentujące odpowiednio kobiety i mężczyzn.
+
+```{r}
+wiersze <- rownames(VADeaths)
+naglowkiM <- c("M - wieś", "M - miasto")
+naglowkiK <- c("K - wieś", "K - miasto")
+mezczyzni <- matrix(data = VADeaths[,1:2], nrow = 5, ncol = 2, dimnames = list(wiersze, naglowkiM))
+mezczyzni
+kobiety <- matrix(data = VADeaths[,3:4], nrow = 5, ncol = 2, dimnames = list(wiersze, naglowkiK))
+kobiety
+```
+
+
+Następnie należało policzyć średnie dla wierszy i kolumn, a także dodanie ich do nowo utworzonych macierzy.
+
+```{r}
+# dodawanie srednich do macierzy dla mezczyzn
+srednie_w_m <- rowMeans(mezczyzni)
+mezczyzni <- cbind(mezczyzni, Srednie = srednie_w_m)
+srednie_k_m <- colMeans(mezczyzni)
+mezczyzni <- rbind(mezczyzni, Srednie = srednie_k_m)
+mezczyzni[6, 3] = 0 
+mezczyzni
+
+# dodawanie srednich do macierzy dla kobiet
+srednie_w_k <- rowMeans(kobiety)
+kobiety <- cbind(kobiety, Srednie = srednie_w_k)
+srednie_k_k <- colMeans(kobiety)
+kobiety <- rbind(kobiety, Srednie = srednie_k_k)
+kobiety[6, 3] = 0
+kobiety
+```
+
+## Zadanie 11
+
+Zadanie 11. polegało na użyciu instrukcji `if-else` oraz `ifelse` w celu sprawdzenia czy podana liczba jest podzielna przez 4.
+
+```{r}
+liczba <- 120321321
+
+if (liczba %% 4 == 0) {
+  "Liczba jest podzielna przez 4"
+} else {
+  "Liczba nie jest podzielna przez 4"
+}
+
+ifelse(liczba %% 4 == 0, 
+       "Liczba jest podzielna przez 4", 
+       "Liczba nie jest podzielna przez 4")
+```
+
+## Zadanie 12 
+
+Celem kolejnego zadania było stworzenie zmiennej `ksiazki` zgodnie z podanym schematem. Dane informują ile poszczególna osoba przeczytała książek w minionym kwartale.
+
+```{r}
+ksiazki <- sample(0:4, size = 25, replace = TRUE)
+ksiazki
+```
+
+Kolejnym etapem zadania było wykonanie odpowiednich poleceń: 
+
+- Ile wynosi średnia liczba przeczytanych książek?
+
+```{r}
+mean(ksiazki)
+```
+
+- Ile osób przeczytało przynajmniej trzy książki?
+
+```{r}
+sum(ksiazki >= 3)
+```
+
+- Ile osób nie przeczytało żadnej książki?
+
+```{r}
+sum(ksiazki == 0)
+```
+
+- Stworzyć zmienną `ksiazki2`, która będzie mówiła o tym, czy ktoś czyta książki (przeczytał min. jedna). Uzyj do tego petli for.
+
+```{r}
+ksiazki2 <- 0
+
+for(i in 1:25) {
+  if (ksiazki[i] != 0)
+    ksiazki2 = ksiazki2 + 1
+}
+
+ksiazki2
+```
+
+- Stworzyć instrukcję warunkową, która mając datę (miesiąc i rok), odpowie na pytanie o liczbę dni w tym miesiącu. Zapoznać się z relacją `%in%`.
+
+```{r}
+data <- c(4, 2023)
+
+dni_31 <- c(1, 3, 5, 7, 8, 10, 12)
+dni_30 <- c(4, 6, 9, 11)
+
+if (data[1] %in% dni_31) {
+  "Liczba dni w podanym miesiacu to 31"
+} else if (data[1] %in% dni_30) {
+  "Liczba dni w podanym miesiacu to 30"
+} else if (data[2] %% 4 == 0) {
+  "Liczba dni w podanym miesiacu to 29"
+} else {
+  "Liczba dni w podanym miesiacu to 28"
+}
+```
+
+## Zadanie 13
+
+Zadanie trzynaste polegało stworzeniu funkcji, która zamienia temperaturę w Celsjuszach na temperaturę w Kelwinach i Fahrenheita.
+
+```{r}
+temperatury <- function(celsjusze) {
+  kelwiny <- celsjusze + 273.15
+  fahrenheita <- celsjusze * 1.8 + 32
+  wyniki <- c(kelwiny, fahrenheita)
+  return(wyniki)
+}
+
+celsjusze <- 30
+
+wyniki <- temperatury(celsjusze)
+
+```
+
+Następnie możemy wypisać wyniki dla podanej temperatury:
+
+```{r}
+cat("Temperatura w Celsjuszach:", celsjusze, "\n")
+cat("Temperatura w Kelwinach:", wyniki[1], "\n")
+cat("Temperatura w Fahrenheitach:", wyniki[2], "\n")
+```
+
+## Zadanie 14
+
+Kolejnym zadaniem było stworzenie funkcji, która na podstawie długości boków trójkąta, wyznacza jego pole. Należało zadbać o to, by funkcja wyświetliła komunikat, jeśli podane długości boków nie tworzą trójkąta.
+
+```{r}
+pole <- function(boki) {
+  boki <- sort(boki, decreasing = T)
+  if (boki[3] + boki[2] <= boki[1]) {
+    return("Podane wymiary bokow nie tworza trojkata")
+  } else {
+    p <- (boki[1] + boki[2] + boki[3])/2
+    pole <- sqrt(p*(p-boki[1])*(p-boki[2])*(p-boki[3]))
+    return(pole)
+  }
+}
+
+boki <- c(3, 4, 5)
+pole_trojkata <- pole(boki)
+pole_trojkata
+```
+
+## Zadanie 15
+
+W zadaniu 15. należało stworzyć funkcję, która na podstawie długości boków trójkąta odpowiada na pytanie o to, czy trójkąt jest ostrokątny, prostokątny lub rozwartokątny.
+
+```{r}
+kat <- function(boki) {
+  boki <- sort(boki, decreasing = T)
+  if (boki[3]^2 + boki[2]^2 == boki[1]^2) {
+    return("Trojkat o podanych bokach jest prostokatny")
+  } else if (boki[3]^2 + boki[2]^2 < boki[1]^2) {
+    return("Trojkat o podanych bokach jest rozwartokatny")
+  } else {
+    return("Trojkat o podanych bokach jest ostrokatny")
+  }
+}
+
+boki <- c(11, 11, 2)
+jaki_kat <- kat(boki)
+jaki_kat
+```
+
+## Zadanie 16
+
+Kolejne zadanie miało na celu stworzenie ramki danych według podanego schematu. 
+
+```{r}
+wzrost <- round(rnorm(100, 175, 10),0)
+waga   <- round(wzrost - 105 + rnorm(1,0,5))
+wiek   <- sample(20:60, 100, replace = TRUE)
+dzieci <- rpois(100, lambda = 1)
+osoby  <- data.frame(wzrost = wzrost, waga = waga,
+                     wiek = wiek, dzieci = dzieci)
+```
+
+Do utworzonej ramki danych należało dołączyć zmienną `BMI` oraz `plec`, gdzie pierwsza połowa danych to kobiety, a druga to mężczyźni.
+
+```{r}
+osoby$BMI <- round(waga/(wzrost/100)^2, 2)
+
+osoby$plec <- rep(c(0,1), each = 50)
+osoby
+```
+
+Następnie należało wykonać szereg poleceń: 
+
+a. Z wykorzystaniem funkcji: `str()`, `head()`, `tail()`, `dim()` oraz `summary()` przyjrzeć się uzyskanemu zestawowi danych.
+
+```{r}
+str(osoby)
+head(osoby)
+tail(osoby)
+dim(osoby)
+summary(osoby)
+```
+
+b. Ile osób w zbiorze danych posiada min. dwójkę dzieci? Spróbuj w tym celu wykorzystać operacje logiczne oraz funkcję `sum()`.
+
+```{r}
+sum(osoby$dzieci >= 2)
+```
+
+c. Użyj instrukcji logicznych, by wydobyć z danych osoby, które posiadają min. 185 cm wzrostu.
+
+```{r}
+osoby[osoby$wzrost >= 185, ]
+```
+
+d. Ile wynosi średnia wzrostu w badanej grupie? (użyć np. funkcji `mean()`)? Czy jesteś w stanie odpowiedzieć na pytanie kto jest przecietnie wyższy: kobiety, czy mężczyźni (użyj funkcji `describe.by()` z pakietu `psych` lub podziel zestaw danych na kobiety i mężczyzn i wyznacz odpowiednie statystyki opisowe)
+
+```{r}
+mean(osoby$wzrost)
+
+library("psych")
+describeBy(osoby, "plec")
+```
+
+Odpowiedź na pytanie dotyczące przeciętnego wzrostu można znaleźć w wyświetlonych statystykach patrząc na odpowiednią rubrykę.
+
+e. Z wykorzystaniem instrukcji logicznych pokaż te osoby, które mają BMI > 30. Ile wśród nich to mężczyźni, a ile to kobiety?
+
+Z uwagi na losujące się dane dotyczące wzrostu oraz wagi, za każdym razem zestaw danych wygląda inaczej, dlatego niekiedy wszystkie wartości są wyświetlane za pomocą poniższego kodu, czasami żadne. Instrukcja zgodnie z którą miał zostać utworzony zestaw danych powoduje, że `BMI` nigdy nie osiąga szukanej wartości 30, z tego powodu zdecydowałem się zmienić wartość na 23.5.
+
+```{r}
+osoby[osoby$BMI > 23.5, ]
+sum(osoby$BMI > 23.5 & osoby$plec == 1)
+sum(osoby$BMI > 23.5 & osoby$plec == 0)
+```
+
+f. Dołącz do zestawu danych zmienną `wzrost2`, która będzie przyjmowała trzy wartości: niski o ile wzrost < 165, sredni, o ile wzrost jest między 165 i 185 oraz wysoki, gdy wzrost >= 185.
+
+```{r}
+osoby$wzrost2 <- ifelse(osoby$wzrost < 165, "niski", ifelse(osoby$wzrost >= 185, "wysoki", "sredni"))
+osoby
+```
+
+g. Skorzystaj z funkcji `summary()` dla zmiennej `wzrost2`. Czy na jej podstawie możesz ocenić, ile osób jest wysokich? Zmień typ tej zmiennej na `factor` - czy to pomogło?
+
+```{r}
+summary(osoby$wzrost2)
+osoby$wzrost2 <- factor(osoby$wzrost2, levels = c("niski", "sredni", "wysoki"))
+summary(osoby$wzrost2)
+```
+
+## Zadanie 17
+
+Zadanie 17. polegało na stworzeniu listy zgodnie z podaną instrukcją.
+
+```{r}
+lista <- list(palenie = c(F,T,T,F,F,T,F),
+              cyfry = 0:9,
+              macierz = matrix(sample(1:5, 16, replace = T), 4, 4),
+              tekst = c("Litwo", "ojczyzno", "moja", "ty",
+                         "jestes", "jak", "zdrowie"))
+lista
+```
+
+Kolejnym etapem było odwołanie się do:
+
+- obiektu `tekst`,
+```{r}
+lista[[4]]
+lista[["tekst"]]
+```
+
+- trzeciego elementu wektora `cyfry`,
+
+```{r}
+lista$cyfry[3]
+```
+
+- trzeciej kolumny obiektu `macierz`.
+
+```{r}
+lista$macierz[, 3]
+```
+
+Ostatnim elementem zadania było stworzenie instrukcji warunkowej sprawdzającej czy podana liczba jest podzielna przez 5.
+
+```{r}
+liczba <- 120321320
+
+if (liczba %% 5 == 0) {
+  "Liczba jest podzielna przez 5"
+} else {
+  "Liczba nie jest podzielna przez 5"
+}
+
+ifelse(liczba %% 5 == 0, 
+       "Liczba jest podzielna przez 5", 
+       "Liczba nie jest podzielna przez 5")
+```
+
+## Zadanie 18
+
+Celem kolejnego zadania było stworzenie zmiennej `ksiazki` zgodnie z podanym schematem. Dane informują ile poszczególna osoba przeczytała książek w minionym kwartale.
+
+```{r}
+ksiazki <- sample(0:4, size = 25, replace = TRUE)
+ksiazki
+```
+
+Kolejnym etapem zadania było wykonanie odpowiednich poleceń: 
+
+- Ile wynosi średnia liczba przeczytanych książek?
+
+```{r}
+mean(ksiazki)
+```
+
+- Ile osób przeczytało przynajmniej trzy książki?
+
+```{r}
+sum(ksiazki >= 3)
+```
+
+- Ile osób nie przeczytało żadnej książki?
+
+```{r}
+sum(ksiazki == 0)
+```
+
+- Stworzyć zmienną `ksiazki2`, która będzie mówiła o tym, czy ktoś czyta książki (przeczytał min. jedna). Uzyj do tego petli for.
+
+```{r}
+ksiazki2 <- 0
+
+for(i in 1:25) {
+  if (ksiazki[i] != 0)
+    ksiazki2 = ksiazki2 + 1
+}
+
+ksiazki2
+```
+
+## Zadanie 19
+
+Zadanie 19. polegało na stworzeniu funkcji, która mając datę (miesiąc i rok) odpowie na pytanie o liczbę dni w tym miesiącu.
+
+```{r}
+ile_dni <- function(data) {
+  dni_31 <- c(1, 3, 5, 7, 8, 10, 12)
+  dni_30 <- c(4, 6, 9, 11)
+  
+  if (data[1] %in% dni_31) {
+    return("Liczba dni w podanym miesiacu to 31")
+  } else if (data[1] %in% dni_30) {
+    return("Liczba dni w podanym miesiacu to 30")
+  } else if (data[2] %% 4 == 0) {
+    return("Liczba dni w podanym miesiacu to 29")
+  } else {
+    return("Liczba dni w podanym miesiacu to 28")
+  }
+}
+
+data <- c(2, 2024)
+ile_dni(data)
+```
+
+## Zadanie 20
+
+Ostatnim zadaniem w tym zestawie było stworzenie funkcji, która na podstawie określonych wzorów pozwala na policzenie pewnym wartości. Zdecydowałem się na napisanie funkcji, która pozwoli obliczyć pierwiastki równania kwadratowego.
+
+```{r}
+rownanie <- function(wsp) {
+  delta <- wsp[2]^2 - 4 * wsp[1] * wsp[3]
+  if (delta > 0) {
+    x1 <- (-wsp[2] + sqrt(delta))/(2 * wsp[1])
+    x2 <- (-wsp[2] - sqrt(delta))/(2 * wsp[1])
+    return(cat("Rozwiazaniem rownania kwadratowego o zadanych wspolczynnikach jest x1 =",
+               x1, " oraz x2 =", x2))
+  }
+  else if (delta == 0) {
+    x <- -wsp[2]/(2 * wsp[1])
+    return(cat("Rozwiazaniem rownania kwadratowego o zadanych wspolczynnikach jest x =", x))
+  }
+  else {
+    re <- -wsp[2]/(2 * wsp[1])
+    im <- sqrt(-delta)/(2 * wsp[1])
+    return(cat("Rozwiazaniem rownania kwadratowego o zadanych wspolczynnikach jest x1 =",
+               re, "+", im,"i  oraz x2 =", re, "-", im,"i"))
+  }
+}
+
+wsp <- c(1,3,5)
+rownanie(wsp)
+```
+
