@@ -1,0 +1,417 @@
+---
+title: "Analiza danych i wariancji"
+author: "Wiktor Kostera, Wojciech Kantor"
+date: '`r format(Sys.time(), "%d %B, %Y")`'
+output: 
+  ioslides_presentation:
+    css: retro.css
+    logo: logo.png
+    df_print: paged
+    encoding: UTF-8
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(corrplot)
+
+```
+
+```{r setup, include=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE)
+```
+
+
+## Opis projektu
+
+W naszym projekcie zajęliśmy się analizą wariancji (ANOVA) danych pobranych z kaggle. Dane zawierają wyniki z egazminów grupy studentów z 3 przedmiotów: matematyki, czytania i pisania, rasę studentów, rodzaj spożywanego posiłku, przygotowanie do testu. Oprócz tego zawierają informacje o stopniu edukacji rodziców. Skupimy się najpierw na wyczyszczeniu danych, krótkiej analizie i kilku wykresach i na końcu na samej analizie wariancji.
+
+
+## Wczytanie danych
+
+Wczytujemy plik StudentsPerformance.csv z danymi dotyczącymi wyników egzaminów grupy studentów ze Stanów zjednoczonych.
+
+```{r}
+students <- read.csv("/Users/wiktorkostera/Desktop/Programowanie w R/Projekt/StudentsPerformance.csv")
+head(students)
+```
+
+Jak widać dane są w języku angielskim, dlatego na samym rozpoczynamy od przetłumaczenia na język polski oraz zmiany zmiennych kategorycznych na typ factor.
+
+## Czyszczenie danych
+
+```{r, echo = FALSE}
+colnames(students) <- c("Płeć", "Grupa etniczna", "Poziom wykształcenia rodziców",
+                        "Rodzaj spożywanych posiłków", "Kurs przygotowawczy", "Wynik-matematyka",
+                        "Wynik-czytanie", "Wynik-pisanie")
+students$Płeć <- ifelse(students$Płeć == "female", "Kobieta", "Mężczyzna")
+
+students$`Grupa etniczna` <- ifelse(students$`Grupa etniczna` == "group A", "Hawajczycy i inni", 
+                                    ifelse(students$`Grupa etniczna` == "group B", "Azjaci",
+                                           ifelse(students$`Grupa etniczna` == "group C", "Biali",
+                                                  ifelse(students$`Grupa etniczna` == "group D", "Afroamerykanie", "Rdzenni Amerykanie"))))
+
+students$`Poziom wykształcenia rodziców` <- ifelse(students$`Poziom wykształcenia rodziców` == "associate's degree", "Studia policealne",
+                                                   ifelse(students$`Poziom wykształcenia rodziców` == "bachelor's degree", "Licencjat",
+                                                          ifelse(students$`Poziom wykształcenia rodziców` == "high school", "Średnie",
+                                                                 ifelse(students$`Poziom wykształcenia rodziców` == "master's degree", "Magister",
+                                                                        ifelse(students$`Poziom wykształcenia rodziców` == "some college", "Studia nieukończone", "Podstawowe")))))
+
+students$`Rodzaj spożywanych posiłków` <- ifelse(students$`Rodzaj spożywanych posiłków` == "free/reduced", "Podstawowy", "Pełny")
+
+students$`Kurs przygotowawczy` <- ifelse(students$`Kurs przygotowawczy` == "completed", "Ukończony", "Brak")
+
+students$Płeć <- as.factor(students$Płeć)
+
+students$`Grupa etniczna` <- as.factor(students$`Grupa etniczna`)
+
+students$`Poziom wykształcenia rodziców` <- as.factor(students$`Poziom wykształcenia rodziców`)
+students$`Poziom wykształcenia rodziców` <- factor(students$`Poziom wykształcenia rodziców`, levels = c("Magister", "Licencjat", "Studia policealne",
+                  "Studia nieukończone", "Średnie", "Podstawowe"))
+
+students$`Rodzaj spożywanych posiłków` <- as.factor(students$`Rodzaj spożywanych posiłków`)
+
+students$`Kurs przygotowawczy` <- as.factor(students$`Kurs przygotowawczy`)
+```
+
+Po zastosowaniu zmian zestaw prezentuje się następująco:
+
+```{r}
+head(students)
+```
+
+## Rozkład zmiennych kategorycznych - Płeć
+
+```{r}
+plot_ly(students,
+        labels = ~Płeć,
+        type = 'pie') %>%
+  layout(title = "Płeć studentów",
+         colorway = c("hotpink","mediumblue"))
+```
+
+## Rozkład zmiennych kategorycznych - Grupa etniczna
+
+```{r}
+students %>%
+  ggplot() +
+  geom_bar(aes(x = `Grupa etniczna`),
+           color = "darkblue",
+           fill = "#00FFFF") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Liczba studentów w poszczególnych grupach etnicznych",
+       y = "Liczba studentów")
+```
+
+## Rozkład zmiennych kategorycznych - Poziom wykształcenia rodziców
+
+```{r}
+students %>%
+  ggplot() +
+  geom_bar(aes(x = `Poziom wykształcenia rodziców`),
+           color = "indianred4",
+           fill = "indianred") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  labs(title = "Liczba rodziców studentów\nz poszczególnym poziomem wykształcenia",
+       y = "Liczba rodziców")
+```
+
+## Rozkład zmiennych kategorycznych - Rodzaj spożywanych posiłków
+
+```{r}
+plot_ly(students,
+        labels = ~`Rodzaj spożywanych posiłków`,
+        type = 'pie') %>%
+  layout(title = "Rodzaj spożywanych posiłków",
+         colorway = c("darkgreen","lightgreen"))
+```
+
+## Rozkład zmiennych kategorycznych - Kurs przygotowawczy
+
+```{r}
+plot_ly(students,
+        labels = ~`Kurs przygotowawczy`,
+        type = 'pie') %>%
+  layout(title = "Odsetek studentów, którzy\nukończyli kurs przygotowawczy",
+         colorway = c("darkred","forestgreen"),
+         margin = list(l = 50, r = 50, b = 50, t = 80))
+```
+
+## Rozkład zmiennych ilościowych - Wynik-matematyka
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-matematyka`),
+               color = "magenta4",
+               fill = "magenta",
+               alpha = 0.3) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wynik studentów z matematyki",
+       x = "Wynik",
+       y = "Gęstość")
+```
+
+## Rozkład zmiennych ilościowych - Wynik-pisanie
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-czytanie`),
+               color = "darkblue",
+               fill = "lightskyblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wynik studentów z czytania",
+       x = "Wynik",
+       y = "Gęstość")
+```
+
+## Rozkład zmiennych ilościowych - Wynik-czytanie
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-pisanie`),
+               color = "darkgreen",
+               fill = "lightgreen") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wynik studentów z pisania",
+       x = "Wynik",
+       y = "Gęstość")
+```
+
+## Tablica korelacji dla zmiennych ilościowych
+
+```{r}
+korelacje <- cor(students[, c("Wynik-matematyka", "Wynik-czytanie", "Wynik-pisanie")],
+                 method = "spearman")
+round(korelacje, 2)
+```
+
+## Wykres tablicy korelacji
+
+```{r}
+corrplot(korelacje, method = "square", type = "upper") 
+```
+
+## Czy kobiety mają lepsze wyniki od mężczyzn z części humanistycznej?
+
+```{r}
+students %>%
+  ggplot() +
+  geom_point(aes(x = `Wynik-czytanie`, y = `Wynik-pisanie`, color = Płeć),
+             alpha = 0.2) +
+  facet_wrap(~ Płeć) +
+  scale_color_manual(values = c("Kobieta" = "hotpink", "Mężczyzna" = "mediumblue")) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wyniki egzaminu z pisania i czytania\nw zależności od płci studentów")
+```
+
+## Czy kobiety mają lepsze wyniki od mężczyzn z części humanistycznej?
+
+```{r}
+students %>%
+  select(Płeć, `Wynik-czytanie`, `Wynik-pisanie`) %>%
+  group_by(Płeć) %>%
+  summarize(ŚREDNIA_PISANIE = mean(`Wynik-pisanie`),
+            ŚREDNIA_CZYTANIE = mean(`Wynik-czytanie`),
+            ODCH_PISANIE = sd(`Wynik-pisanie`),
+            ODCH_CZYTANIE = sd(`Wynik-czytanie`),
+            MIN_PISANIE = min(`Wynik-pisanie`),
+            MIN_CZYTANIE = min(`Wynik-czytanie`),
+            MAX_PISANIE = max(`Wynik-pisanie`),
+            MAX_CZYTANIE = max(`Wynik-czytanie`))
+```
+
+## Wykształcenie rodziców, a wynik z matematyki
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-matematyka`, fill = `Poziom wykształcenia rodziców`),
+             alpha = 0.2) +
+  facet_wrap(~ `Poziom wykształcenia rodziców`, ncol = 2) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wyniki egzaminu z matematyki\nw zależności od poziomu wykształcenia rodziców",
+       y = "Gęstość")
+```
+
+## Wykształcenie rodziców, a wynik z matematyki
+
+```{r}
+students %>%
+  select(`Poziom wykształcenia rodziców`, `Wynik-matematyka`) %>%
+  group_by(`Poziom wykształcenia rodziców`) %>%
+  summarize(ŚREDNIA = mean(`Wynik-matematyka`),
+            ODCHYLENIE = sd(`Wynik-matematyka`),
+            MINIMUM = min(`Wynik-matematyka`),
+            MAKSIMUM = max(`Wynik-matematyka`))
+```
+
+## Wykształcenie rodziców, a wynik z pisania
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-pisanie`, fill = `Poziom wykształcenia rodziców`),
+               alpha = 0.2) +
+  facet_wrap(~ `Poziom wykształcenia rodziców`, ncol = 2) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wyniki egzaminu z pisania\nw zależności od poziomu wykształcenia rodziców",
+       y = "Gęstość")
+```
+
+## Wykształcenie rodziców, a wynik z pisania
+
+```{r}
+students %>%
+  select(`Poziom wykształcenia rodziców`, `Wynik-pisanie`) %>%
+  group_by(`Poziom wykształcenia rodziców`) %>%
+  summarize(ŚREDNIA = mean(`Wynik-pisanie`),
+            ODCHYLENIE = sd(`Wynik-pisanie`),
+            MINIMUM = min(`Wynik-pisanie`),
+            MAKSIMUM = max(`Wynik-pisanie`))
+```
+
+## Wykształcenie rodziców, a wynik z czytania
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-czytanie`, fill = `Poziom wykształcenia rodziców`),
+               alpha = 0.2) +
+  facet_wrap(~ `Poziom wykształcenia rodziców`, ncol = 2) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wyniki egzaminu z czytania\nw zależności od poziomu wykształcenia rodziców",
+       y = "Gęstość")
+```
+
+## Wykształcenie rodziców, a wynik z czytania
+
+```{r}
+students %>%
+  select(`Poziom wykształcenia rodziców`, `Wynik-czytanie`) %>%
+  group_by(`Poziom wykształcenia rodziców`) %>%
+  summarize(ŚREDNIA = mean(`Wynik-czytanie`),
+            ODCHYLENIE = sd(`Wynik-czytanie`),
+            MINIMUM = min(`Wynik-czytanie`),
+            MAKSIMUM = max(`Wynik-czytanie`))
+```
+
+## Wpływ spożywanego posiłku i kursu na wynik z matematyki
+
+```{r}
+students %>%
+  ggplot() +
+  geom_density(aes(x = `Wynik-matematyka`, fill = `Kurs przygotowawczy`),
+               alpha = 0.2) +
+  facet_grid(`Kurs przygotowawczy` ~ `Rodzaj spożywanych posiłków`) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wyniki egzaminu z matematyki\nw zależności od poziomu wykształcenia rodziców",
+       y = "Gęstość")
+```
+
+## Analiza wariancji
+
+Analiza wariancji (ANOVA) służy do badania obserwacji, które zależą od jednego lub kilku działających równocześnie czynników. Sprawdzamy czy jedna zmienna kategoryczna wpływa na wynik zmiennej ilościowej. Chcemy sprawdzić czy średnie różnią się istotnie w poszczególnych grupach.
+
+Założenia analizy wariancji:
+
+-   dane muszą być ilościowe
+
+-   wariancje muszą być homogeniczne, czyli zróżnicowanie wariancji w grupach jest podobne
+
+-   dane pochodzą z rozkładu normalnego
+
+
+Najpierw sprawdzamy homogeniczność wariancji testem Bartletta, jeśli p-value jest większe niż 0.05, przechodzimy do analizy wariancji. Po analizie wariancji sprawdzamy, które średnie różnią się istotnie (funkcją TukeyHSD). Na końcu sprawdzamy zgodność danych z rozkładem normalnym.
+
+## Wynik z matematyki a grupa etniczna
+
+ <div style="text-align: center;">
+  <img src="/Users/wiktorkostera/Desktop/Programowanie w R/Projekt/16149867_16149864.jpg" alt="Opis obrazka" width="500" height="300"/>
+</div>
+
+
+## Homogeniczność wariancji
+
+```{r, echo = TRUE}
+    bartlett.test(students$`Wynik-matematyka` ~ students$`Grupa etniczna`)
+```
+  Jak możemy zauważyć, p-value jest większe niż 0.05, więc nie ma podstaw do odrzucenia hipotezy zerowej, która głosi, że wariancje są homogeniczne. Przechodzimy do ANOVY.
+  
+## ANOVA
+
+```{r, echo = TRUE}
+  aov1 <- aov(students$`Wynik-matematyka` ~ students$`Grupa etniczna`)
+  summary(aov1)
+```
+  P-value testu ANOVY jest niższe niż 0.05. Oznacza to, że średnie przynajmniej dla jednej pary grup różnią się istotnie. Sprawdzimy, w których grupach średnie różnią się istotnie.
+  
+## Które średnie różnią się istotnie?
+
+```{r, echo = TRUE}
+    TukeyHSD(aov1)
+```
+ Sprawdzamy, w których grupach średnie różnią się istotnie. Są to grupy gdzie p-value jest mniejsze niż 0.05. Na przykład Azjaci-Afroamerykanie czy Rdzenni Amerykanie-Biali.
+
+
+## Zgodność z rozkładem normalnym
+
+```{r, echo = TRUE}
+  tapply(students$`Wynik-matematyka`, students$`Grupa etniczna`, shapiro.test)
+```
+ Widzimy że rozkład normalny mają tylko grupy Afroamerykanów oraz Hawajczyków i innych, natomiast dla innych grup etnicznych p-value w teście Shapiro-Wilka jest mniejsze niz 0.05, więc nie możemy powiedzieć, że pochodzą z rozkładu normalnego.
+
+
+## Wynik z matematyki a rodzaj spożywanych posiłków
+
+<div style="text-align: center;">
+  <img src="/Users/wiktorkostera/Desktop/Programowanie w R/Projekt/istockphoto-1031379514-612x612.jpg" alt="Opis obrazka" width="500" height="300"/>
+</div>
+
+## Homogeniczność wariancji
+
+```{r, echo = TRUE}
+    bartlett.test(students$`Wynik-matematyka` ~ students$`Rodzaj spożywanych posiłków`)
+```
+  W tym przypadku, p-value z testu Bartletta jest mniejsze niż 0.05, nie możemy więc przeprowadzić analizy wariancji. Wobec tego stosujemy test Kruskala-Wallisa w celu przeprowadzenia nieparametrycznej analizy wariancji.
+
+## Nieparametryczna analiza wariancji
+
+```{r}
+      kruskal.test(students$`Wynik-matematyka` ~ students$`Rodzaj spożywanych posiłków`)
+```
+  P-value w teście Kruskala-Wallisa jest niższe niż przyjęte przez nas 0.05, a zatem średnie różnią się istotnie.
+  
+
+
+## Aplikacja Shiny
+  Nasza aplikacja składa się z kilku kart, za pomocą których użytkownik decyduje co chce zobaczyć: część analizy danych, wyświetlenie dowolnych wykresów i statystyk opisowych. W przypadku analizy wariancji może sam przeprowadzić test Bartletta, ANOVĘ, TukeyHSD oraz test Shapiro-Wilka. Także w przypadku kiedy ANOVA jest niemożliwa, istnieje możliwość przeprowadzenia testu Kruskala-Wallisa.
+  
+
+
