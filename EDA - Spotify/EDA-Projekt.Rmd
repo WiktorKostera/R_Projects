@@ -1,0 +1,987 @@
+---
+title: "EDA - Spotify 1999-2019"
+author: "Wiktor Kostera"
+date: "2023-11-29"
+output: 
+  html_document:    
+    theme: cerulean
+    toc: true
+    highlight: tango
+    toc_float: true
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{r, echo=FALSE}
+utwory <- read.csv("/Users/wiktorkostera/Desktop/Wstęp do analizy danych/utwory.csv")
+```
+
+# Wstęp
+
+W poniższej pracy dokonam eksploracyjnej analizy danych na zestawie pochodzącym ze strony <https://www.kaggle.com/datasets/paradisejoy/top-hits-spotify-from-20002019/data>. Dane przedstawiają statystyki dotyczące najczęściej pojawiających się utworów w najpopularniejszych playlistach serwisu Spotify w latach 1999-2019. W celu dogłębnej analizy posłużę się licznymi statystykami opisowymi oraz odpowiednimi wizualizacjami. Na samym początku załadujmy pakiety, których funkcje pozwolą na przeprowadzenie poszczególnych operacji na przygotowanym zestawie danych.
+
+```{r, message = FALSE}
+library(dplyr)
+library(ggplot2)
+library(mice)
+library(plotly)
+library(corrplot)
+library(RColorBrewer)
+```
+
+Po wczytaniu pakietów, możemy przystąpić do obejrzenia zawartości danych i weryfikacji ewentualnych braków danych:
+
+```{r}
+str(utwory)
+head(utwory)
+md.pattern(utwory, rotate.names = TRUE)
+```
+
+Widzimy, że nasz zestaw zawiera 2000 obserwacji, składa się z 18 kolumn. Ponadto możemy zauważyć, że zestaw nie posiada żadnych braków danych.
+
+# Czyszczenie i przygotowanie danych
+
+Niestety nazwy kolumn są w języku angielskim dlatego przed rozpoczęciem pracy z zestawem pozwolę sobię na ich przetłumaczenie co umożliwi łatwiejszą pracę w dalszej części.
+
+```{r}
+colnames(utwory) <- c("Artysta", "Tytul_piosenki", "Czas_trwania", 
+                               "Wulgarnosc", "Rok_wydania", "Popularnosc",
+                               "Tanecznosc", "Energicznosc", "Klucz", "Glosnosc",
+                               "Skala", "Slowa_mowione", "Akustycznosc",
+                               "Instrumentalnosc", "Na_zywo", "Pozytywnosc",
+                               "BPM", "Gatunek")
+```
+
+Następnie sprawdzamy czy w zestawie nie występują duplikaty tych samym piosenek, jeżeli tak to je usuwamy:
+
+```{r}
+utwory <- utwory %>%
+  distinct(Artysta, Tytul_piosenki, .keep_all = TRUE)
+```
+
+Zestaw zawiera niewielką ilość danych dla utworów z lat 1998 i 2020, które mogą wpływać na zależności pomiędzy zmiennymi, dlatego decyduję się na usunięcie ich z zestawu.
+
+```{r}
+utwory <- utwory %>%
+  filter(Rok_wydania != 1998 & Rok_wydania != 2020)
+```
+
+Ponadto wprowadzamy zmiany w zmiennych w zmiennych `Akustycznosc`, `Czas_trwania` oraz `BPM`.
+
+```{r}
+utwory$Akustycznosc <- utwory$Akustycznosc * 100
+
+utwory <- utwory %>%
+  mutate(Czas_trwania = Czas_trwania / 1000)
+
+utwory$BPM <- round(utwory$BPM, 0)
+```
+
+W kolejnej części tworzymy zmienną kategoryczną w zależności od wartości pozytywności oraz zmieniamy pozostałe zmienne kategoryczne na wartości typu `factor`.
+
+```{r}
+utwory$Pozytywnosc_kat <- ifelse(utwory$Pozytywnosc >= 0.8, "Bardzo pozytywny", 
+                                          ifelse(utwory$Pozytywnosc >= 0.6, "Pozytywny",
+                                          ifelse(utwory$Pozytywnosc >= 0.4, "Neutralny",
+                                          ifelse(utwory$Pozytywnosc >= 0.2, "Negatywny", "Bardzo negatywny")))) 
+
+utwory$Pozytywnosc_kat <- factor(utwory$Pozytywnosc_kat, 
+                                          levels = c("Bardzo pozytywny", 
+                                                     "Pozytywny",
+                                                     "Neutralny",
+                                                     "Negatywny",
+                                                     "Bardzo negatywny"))
+
+utwory$Wulgarnosc <- ifelse(utwory$Wulgarnosc == "False", "Nie", "Tak")
+
+utwory$Wulgarnosc <- factor(utwory$Wulgarnosc, levels = c("Nie", "Tak"))
+
+utwory$Skala <- ifelse(utwory$Skala == 0, "Minor", "Major")
+
+utwory$Skala <- factor(utwory$Skala, levels = c("Minor", "Major"))
+
+utwory$Klucz <- factor(utwory$Klucz, levels = c(0:11))
+
+utwory$Rok_wydania <- factor(utwory$Rok_wydania, levels = c(1999:2019))
+```
+
+Ponadto decyduję się na usunięcie z zestawu kolumny `Na_zywo`. Niestety dokumentacja dostępna na stronie, z której pochodzi zestaw nie wyjaśnia w żaden sposób pochodzenia tych wartości, dlatego w celu zapewnienia maksymalnej rzetelności swojej pracy postanowiłem nie opierać swojej analizy na tej zmiennej.
+
+```{r}
+utwory <- utwory[, -15]
+```
+
+Na sam koniec wprowadzam zmiany w zmiennej `Popularnosc`. Do tej pory w zestawie mieliśmy do czynienia z małolicznymi danymi dla wartości poniżej 40, dlatego pozbywam się ich z zestawu i dokonuje odpowiednich obliczeń w celu przewartościowania pozostałych wartości na przedział 0-100.
+
+```{r}
+utwory <- utwory %>%
+  filter(Popularnosc >= 40)
+
+utwory$Popularnosc <- (utwory$Popularnosc - 40) * 2
+```
+
+Spójrzmy jeszcze raz na strukturę zestawu i pierwsze kilka wierszy:
+
+```{r}
+str(utwory)
+head(utwory)
+```
+
+Możemy zauważyć, że nasza ostateczna wersja zestawu danych składa się z 1711 wierszy oraz 18 kolumn.
+
+# Omówienie zmiennych
+
+Skoro przygotowaliśmy dane, możemy przejść do omówienia znaczenia wartości każdej z kolumn:
+
+* `Artysta` - nazwa artysty.
+
+* `Tytul_piosenki` - tytuł utworu muzycznego.
+
+* `Czas_trwania` - czas trwania utworu wyrażony w sekundach.
+
+* `Wulgarnosc` - zmienna opisująca czy dany utwór zawiera treści wulgarne.
+
+* `Rok_wydania` - rok, w którym miała miejsce premiera utworu.
+
+* `Popularnosc` - wartość określająca popularność utworu w odniesieniu do pozostałych utworów w zestawie. Im wyższa wartość tym bardziej popularny był utwór.
+
+* `Tanecznosc` - wartość określająca czy dany utwór pasuje do tańca. Im wyższa wartość tym bardziej dany utwór jest taneczny.
+
+* `Energicznosc` - wartość określająca w jakim stopniu utwór jest energiczny. Im wyższa wartość tym bardziej dany utwór jest energiczny.
+
+* `Klucz` - klucz muzyczny w jakim utwór został skomponowany. Wartości odpowiadają poszczególnym gamom gdzie 0 oznacza C, 1 oznacza C# i tak dalej aż do 11 oznaczającej H.
+
+* `Glosnosc` - jest to zmienna używana do pomiaru głośności w cyfrowych systemach audio. Wartość 0 dB to największa możliwa wartość głośności, jaką można reprezentować cyfrowo bez zniekształceń. Wartości poniżej 0 dBFS oznaczają niższe poziomy głośności w odniesieniu do tego maksimum. W praktyce im niższa wartość tym cichszy dźwięk.
+
+* `Skala` - skala w jakiej został skomponowany utwór. Skala minorowa oznacza utwory, które zwykle są smutniejsze podczas gdy skala majorowa określa utwory radosne.
+
+* `Slowa_mowione` - określa stosunek mówionych słów do pozostałych dźwięków w utworze. Utwory o wartości powyżej 0.33 najprawdopodobniej należą do gatunków takich jak rap.
+
+* `Akustycznosc` - wartość określająca akustyczność danego utworu. Im wyższa wartość tym większa ilość dźwięków akustycznych w utworze.
+
+* `Instrumentalnosc` - wartość określająca jaka część utworu nie zawiera wokalu.
+
+* `Pozytywnosc` - wartość określająca charakter danego utworu tzn. im wyższa wartość tym bardziej pozytywny jest dany utwór (np. wesoły, radosny), a niższa świadczy o negatywności (np. smutny, depresyjny).
+
+* `BPM` - tempo w jakim utwór został wykonany.
+
+* `Gatunek` - gatunek muzyczny utworu.
+
+* `Pozytywnosc_kat` - pozytywność danego utworu w podziale na kategorie.
+
+# Pytania badawcze
+
+Po zapoznaniu się z zestawem danych możemy przejść do zasadniczej części EDA, w której postawimy sobie pytania, na które udzielimy odpowiedzi w dalszej częsci pracy. Poniższe pytania stanowią wyłącznie wstępny pomysł, który może się rozwijać w zależności od otrzymanych wyników. Na podstawie danych dotyczących najpopularniejszych utworów z lat 1999-2019 chciałbym przede wszystkim uzyskać odpowiedź na następujące pytania:
+
+1. Którzy wykonawcy mają najwięcej hitów?
+
+2. Które utwory były najpopularniejsze?
+
+3. Jaki rodzaj muzyki jest najpopularniejszy? 
+
+4. Czy wraz z biegiem lat coraz więcej utworów zawiera treści wulgarne?
+
+5. Czy wulgarność utworu wpływa na odczucia słuchaczy?
+
+6. Czy istnieje jakaś zależność miedzy skalą lub kluczem, a popularnością?
+
+7. Co wpływa na pozytywne odczucia słuchaczy?
+
+8. W jaki sposób tempo utworu wpływa na chęć słuchaczy do tańca? Jakie inne cechy utworu na to wpływają?
+
+# Zmienne kategoryczne 
+
+## Rok wydania
+
+Przechodzimy do szerszego zapoznania się z każdą ze zmiennych. Zaczynamy od zmiennych kategorycznych i na początku omówimy sobie `Rok_wydania`.
+
+```{r}
+table(utwory$Rok_wydania)
+```
+
+Jak widać wszystkie klasy są liczne i dzięki wcześniejszemu usunięciu danych dla lat 1998 i 2020 nie ma wartości odstających. Możemy to zwizualizować również za pomocą wykresu słupkowego poziomego.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_bar(aes(y = Rok_wydania),
+           color = "burlywood3", 
+           fill = "burlywood1") +
+  theme_light() +
+  labs(title = "Ilość utworów w poszczególnych latach",
+       x = "Ilość utworów",
+       y = "Rok")
+```
+
+## Wulgarność
+
+Kolejną zmienną jest `Wulgarnosc` określająca zawartość treści wulgarnych w utworze.
+
+```{r}
+table(utwory$Wulgarnosc)
+```
+
+Jak widać zdecydowana większość prezentowanych utworów nie zawiera treści wulgarnych. Możemy to pokazać również na wykresie kołowym. W tym celu korzystam z pakietu `plotly`.
+
+```{r}
+plot_ly(utwory,
+        labels = ~Wulgarnosc,
+        type = 'pie',
+        marker = list(colors = c("lightskyblue","lightskyblue1"))) %>%
+  layout(title = "Wulgarność utworów")
+```
+
+## Klucz
+
+Zmienna `Klucz` określa nam gamę w jakim został skomponowany utwór. Gama utworu jest dobierana zależnie od preferencji artysty i od tego w jakiej łatwiej mu wykonywać dany utwór, jednak zależnościami dotyczącymi wyboru gamy zajmiemy się w dalszej części analizy.
+
+```{r}
+table(utwory$Klucz)
+```
+
+Jak widać ponownie mamy do czynienia z licznymi klasami, prezentujemy to również za pomocą wykresu słupkowego.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_bar(aes(y = Klucz),
+           color = "mistyrose3",
+           fill = "mistyrose") +
+  theme_light() +
+  labs(title = "Ilość utworów w danym kluczu muzycznym",
+       x = "Ilość utworów",
+       y = "Klucz")
+```
+
+## Skala
+
+Kolejna zmienna kategoryczną jest `Skala`, cecha opisująca w jakiej skali muzycznej został skomponowany utwór.
+
+```{r}
+table(utwory$Skala)
+```
+
+Jak widać w większości mamy do czynienia z utworami wykonanymi w skali majorowej, a zatem możemy wyciągnąć wstępne wnioski, że do najpopularniejszych utworów należą przede wszystkim te o wesołej linii melodycznej. Ilość utworów w zależności od skali ponownie obrazuję za pomocą wykresu kołowego.
+
+```{r}
+plot_ly(utwory, 
+        labels = ~Skala,
+        type = 'pie',
+        marker = list(colors = c("darkgreen","lightgreen"))) %>%
+        layout(title = "Muzyczna skala utworów")
+```
+
+## Pozytywność - kategorie
+
+Ostatnią zmienną kategoryczną jest stworzona przeze mnie cecha `Pozytywnosc_kat` określająca charakter danego utworu.
+
+```{r}
+table(utwory$Pozytywnosc_kat)
+```
+
+Wszystkie klasy są liczne co prezentuję również za pomocą wykresu.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_bar(aes(x = Pozytywnosc_kat),
+           color = "lightskyblue",
+           fill = "lightskyblue1") + 
+  theme_light() + 
+  labs(title = "Ilość utworów w danych kategoriach pozytywności",
+       x = "Pozytywność",
+       y = "Ilość")
+```
+
+# Zmienne ilościowe
+
+## Popularność
+
+Po omówieniu zmiennych kategorycznych przechodzimy do zaprezentowania zmiennych ilościowych. Zaczynamy od zmiennej `Popularnosc`, odzwierciedlającej popularność danego utworu w odniesieniu do pozostałych w zestawie.
+
+```{r}
+summary(utwory$Popularnosc)
+```
+
+Patrząc na kwartyle spodziewam się lekkiej asymetrii lewostronnej. W celu weryfikacji tworzę wykres gęstości.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_density(aes(x = Popularnosc),
+               color = "pink3",
+               fill = "pink") +
+  theme_light() +
+  labs(title = "Popularność utworów",
+       x = "Popularność",
+       y = "Gęstość")
+```
+
+## Czas trwania
+
+Kolejną zmienną ilościową jest zmienna `Czas_trwania` opisująca długość utworu w sekundach.
+
+```{r}
+summary(utwory$Czas_trwania)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_boxplot(aes(x = Czas_trwania)) +
+  theme_light() +
+  labs(title = "Czas trwania utworów wyrażony w sekundach",
+       x = "Czas trwania")
+```
+
+Otrzymujemy wartości odstające.
+
+```{r}
+quantile(utwory$Czas_trwania, 
+         probs = c(0, 0.1, 0.95, 1))
+```
+
+Jak widać tylko 10% utworów ma długość powyżej 5 minut.
+
+## Taneczność
+
+Zmienna `Tanecznosc` określa czy dany utwór pasuje do tańca.
+
+```{r}
+summary(utwory$Tanecznosc)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_histogram(aes(x = Tanecznosc),
+                 bins = 10,
+                 color = "wheat4",
+                 fill = "wheat") +
+  theme_light() +
+  labs(title = "Taneczność utworów w skali 0 - 1",
+       x = "Taneczność",
+       y = "Ilość utworów")
+```
+
+Jak widać zdecydowaną większość utworów możemy określić jako "nadające się" do tańca. Spójrzmy jednak jeszcze na kwantyle.
+
+```{r}
+quantile(utwory$Tanecznosc, 
+         probs = c(0, 0.01, 0.05, 0.15, 0.25, 0.5, 0.75, 1))
+```
+
+Jeśli założymy, że utwory mało taneczne charakteryzują się wartością mniejszą niż 0.4 wówczas możemy stwierdzić, że tylko niecałe 5% utworów nie są utworami, do których można się dobrze bawić na różnego rodzaju imprezach czy dyskotekach.
+
+## Energiczność
+
+Kolejna zmienna to `Energicznosc`, która mówi nam o stopniu energiczności danego utworu.
+
+```{r}
+summary(utwory$Energicznosc)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_density(aes(x = Energicznosc),
+               color = "lightskyblue4",
+               fill = "lightskyblue1") +
+  theme_light() +
+  labs(title = "Energiczność utworów w skali 0 - 1",
+       x = "Energiczność",
+       y = "Gęstość")
+```
+
+Patrząc na wykres zdecydowanie możemy stwierdzić, że większość prezentowanych utwórów ma charakter energiczny.
+
+## Głośność
+
+Następną zmienną w zestawie jest zmienna `Glosnosc`. Jest to wartość, którą posługują się producenci muzyczni oraz osoby odpowiedzialne za mix i mastering utworu.
+
+```{r}
+summary(utwory$Glosnosc)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_histogram(aes(x = Glosnosc),
+                 bins = 10,
+                 color = "darkgreen",
+                 fill = "lightgreen") +
+  theme_light() +
+  labs(title = "Głośność utworów w ramach masteringu (dB)",
+       x = "Głośność",
+       y = "Gęstość")
+```
+
+Zdecydowanie większość utworów klasyfikuje się w przedziale od -10 do -1.
+
+```{r}
+quantile(utwory$Glosnosc,
+         probs = c(0, 0.01, 0.1, 0.25, 0.5, 0.75, 0.99, 1))
+```
+
+Jak widać tylko 1% utworów ma głośność mniejszą od -11.
+
+## Słowa mówione
+
+Zmienna `Slowa_mowione` odzwierciedla stosunek mówionych słów do pozostałych dźwięków w utworze.
+
+```{r}
+summary(utwory$Slowa_mowione)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_density(aes(x = Slowa_mowione),
+               color = "lightgoldenrod4",
+               fill = "lightgoldenrod1") +
+  theme_light() +
+  labs(title = "Stosunek słów mówionych w utworze w skali 0 - 1",
+       x = "Słowa mówione",
+       y = "Gęstość")
+```
+
+Na podstawie wykresu można powiedzieć, że tylko nieliczne utwory nie są śpiewane.
+
+```{r}
+quantile(utwory$Slowa_mowione, 
+         probs = c(0, 0.5, 0.9, 0.95, 1))
+```
+
+Możemy przyjąć, że tylko 5% utworów pochodzą prawdopodobnie z gatunku rap.
+
+## Akustyczność
+
+Kolejna zmienna to `Akustycznosc` określająca najprościej mówiąc akustyczność danego utworu. Im wyższa wartość tym większa ilość dźwięków akustycznych w utworze
+
+```{r}
+summary(utwory$Akustycznosc)
+```
+
+```{r}
+utwory %>% 
+  ggplot() +
+  geom_density(aes(x = Akustycznosc),
+               color = "pink3",
+               fill = "pink") +
+  theme_light() +
+  labs(title = "Akustyczność utworów w utworze w skali 0 - 100",
+       x = "Akustyczność",
+       y = "Gęstość")
+```
+
+Wykres gęstości dla zmiennej `Akustycznosc` jest dosyć podobny jak dla zmiennej `Slowa_mowione`. Ponownie możemy stwierdzić, że tylko nieliczne utwory w zestawie są akustyczne.
+
+```{r}
+quantile(utwory$Akustycznosc, 
+         probs = c(0, 0.5, 0.9, 0.95, 1))
+```
+
+Jak widać tylko 5% utworów została stworzona przy użyciu dźwięków akustycznych, a co za tym idzie bez zastosowania syntezy elektronicznej.
+
+## Instrumentalność
+
+`Instrumentalnosc`określa jaka część utworu nie zawiera wokalu.
+
+```{r}
+summary(utwory$Instrumentalnosc)
+```
+
+Ciężko jest coś powiedzieć o rozkładzie tej zmiennej dlatego posługuję się dodatkowo odpowiednimi kwantylami.
+
+```{r}
+quantile(utwory$Instrumentalnosc,
+         probs = c(0, 0.5, 0.9, 0.95, 0.99, 1))
+```
+
+Tylko 1% utworów składa się w przynajmniej 50% z dzwięków bez wokalu, dlatego w dalszej części analizy nie będę się powoływał na tą zmienną.
+
+## BPM
+
+Ostatnią zmienną ilościową jest `BPM` czyli zmienna, która opisuje nam ilość uderzeń na minutę (tempo utworu).
+
+```{r}
+summary(utwory$BPM)
+```
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_histogram(aes(x = BPM),
+                 bins = 10,
+                 color = "darkblue",
+                 fill = "lightblue") +
+  theme_light() +
+  labs(title = "Ilość uderzeń na minutę w danym utworze (Tempo)",
+       x = "Tempo",
+       y = "Ilość")
+```
+
+Jak widać większość utworu ma tempo w przedziale od 60 do 150. W celu wizualizacji rozkładu mogę również posłużyć się wykresem pudełkowym.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_boxplot(aes(x = BPM)) +
+  theme_light() +
+  labs(title = "Ilość uderzeń na minutę w danym utworze (Tempo)",
+       x = "Tempo")  
+```
+
+```{r}
+quantile(utwory$BPM, 
+         probs = c(0, 0.25, 0.5, 0.75, 0.90, 0.99, 1))
+```
+
+Można zauważyć, że tylko niecały 1% utworów ma tempo powyżej 200 natomiast 10% utworów możemy sklasyfikować jako bardzo szybkie ponieważ ich BPM przekracza 160.
+
+# Pytanie 1.
+
+Na samym początku postaram się odpowiedzieć na pytanie: Którzy wykonawcy mają najwięcej hitów? W tym celu muszę odpowiednio przygotować dane grupując je w zależności od artysty.
+
+```{r}
+artysci <- utwory %>%
+  select(Artysta) %>%
+  group_by(Artysta) %>%
+  summarize(Ilosc = n()) %>%
+  arrange(desc(Ilosc)) %>%
+  slice(1:20) %>%
+  print(n = Inf)
+```
+
+Następnie przygotowane dane przenoszę na wykres słupkowy.
+
+```{r}
+artysci %>% 
+  ggplot() +
+  geom_bar(aes(x = reorder(Artysta, -Ilosc), y = Ilosc), 
+           stat = "identity",
+           color = "peachpuff4",
+           fill = "peachpuff") + 
+  theme_light() +
+  labs(title = "Ilość utworów danego artysty",
+       x = "Artysta",
+       y = "Ilość utworów") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Jak widać na przestrzeni lat 1999-2019 artystami o największej ilości popularnych utworów byli: 
+
+* Rihanna
+
+* Eminem 
+
+* Calvin Harris
+
+# Pytanie 2.
+
+Poznaliśmy artystów z największą ilością hitów. Zastanówmy się teraz, które utwory były jednak najpopularniejsze. Ponownie zaczynamy od odpowiedniego przygotowania danych sortując po popularności i wybierając pierwsze 20.
+
+```{r}
+popularne <- utwory %>%
+  select(Tytul_piosenki, Popularnosc) %>%
+  arrange(desc(Popularnosc)) %>%
+  slice(1:20)
+```
+
+Przenosimy dane na wykres kolumnowy.
+
+```{r}
+popularne %>%
+  ggplot() +
+  geom_bar(aes(x = reorder(Tytul_piosenki, -Popularnosc), y = Popularnosc), 
+           stat = "identity",
+           color = "darkgreen",
+           fill = "lightgreen") + 
+  theme_light() +
+  labs(title = "Najpopularniejsze utwory muzyczne",
+       x = "Tytuł",
+       y = "Popularność utworu") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Jak widać mamy wiele utworów o podobnym poziomie popularności jednak na podstawie uzyskanych wyników możemy powiedzieć, że najpopularniejsze utwory w latach 1999-2019 to:
+
+* Sweater Weather
+
+* Another Love
+
+* Without Me
+
+# Pytanie 3.
+
+Znamy już najpopularniejszych artystów i najpopularniejsze utwory. Zastanówmy się jednak, jaki gatunek muzyczny był najpopularniejszy w latach 1999-2019. W tym celu grupuję dane po gatunku muzycznym.
+
+```{r}
+najpopularniejsze <- utwory %>%
+  select(Gatunek) %>%
+  group_by(Gatunek) %>%
+  summarize(Ilosc = n()) %>%
+  arrange(desc(Ilosc)) %>%
+  print(n = Inf)
+```
+
+Otrzymane dane przenoszę na wykres.
+
+```{r}
+najpopularniejsze %>%
+  filter(Ilosc > 10) %>%
+  ggplot() +
+  geom_bar(aes(x = reorder(Gatunek, -Ilosc), y = Ilosc), 
+           stat = "identity",
+           color = "darkblue",
+           fill = "lightblue") + 
+  theme_light() +
+  labs(title = "Popularność utworów ze względu na gatunek",
+       x = "Gatunek",
+       y = "Ilość utworów") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Otrzymany wykres pokazuje, że na przestrzeni lat 1999-2019 najpopularniejszymi gatunkami muzycznymi były wszelkie odmiany popu w połączeniu z hip hopem.
+
+# Pytanie 4.
+
+W kolejnym pytaniu chciałbym się zastanowić nad tym czy na przestrzeni lat możemy zaobserować coraz większą ilość treści wulgarnych w utworach muzycznych. W tym celu rozważę stosunek utworów wulgarnych do wszystkich utworów w danym roku kalendarzowym. Rozpoczynam od stworzenia wektora z ilością utworów na dany rok.
+
+```{r}
+wulgarne <- as.vector(table(utwory$Rok_wydania))
+wulgarne
+```
+
+Następnie tworzę zestaw danych zawierających wyłącznie ilość utworów z treściami wulgarnymi w danym roku.
+
+```{r}
+wlg_lata <- utwory %>%
+  filter(Wulgarnosc == "Tak") %>%
+  select(Rok_wydania, Wulgarnosc) %>%
+  group_by(Rok_wydania) %>%
+  summarize(Ilosc = n()) %>%
+  print(n = Inf)
+```
+
+Na podstawie stosunku tworzę wykres.
+
+```{r}
+wlg_lata %>%
+  ggplot(aes(x = Rok_wydania, y = Ilosc / wulgarne)) +
+  geom_line(aes(group = 1), 
+            linewidth = 0.3,
+            color = "red") +
+  geom_point(size = 3) + 
+  theme_light() +
+  labs(title = "Stosunek ilości utworów wulgarnych do ilości utworów",
+       x = "Rok",
+       y = "Stosunek") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+```
+
+Na podstawie wykresu możemy stwierdzić, że od 2014 roku obserwujemy wzrost treści wulgarnych.
+
+# Pytanie 5.
+
+Poprzednie pytanie pozwoliło na określenie czy mamy do czynienia z coraz większą ilością treści wulgarnych. Uzyskaliśmy odpowiedź twierdzącą, wobec tego zastanowię się czy wulgarne treści przekładają się na odbiór słuchaczy - czy treści wulgarne wpływają na pozytywność utworu.
+
+Tworzę wykres kolumnowy dla utworów z treścią wulgarną w zależności od kategorii pozytywności.
+
+```{r}
+utwory %>% 
+  filter(Wulgarnosc == "Tak") %>%
+  ggplot() +
+  geom_bar(aes(x = Wulgarnosc, fill = Pozytywnosc_kat),
+           color = "black", 
+           position = "dodge2") +
+  theme_light() +
+  labs(title = "Wulgarność utworu, a jego pozytywność",
+       x = "Wulgarność",
+       y = "Liczba utworów",
+       fill = "Pozytywność utworów") + 
+  theme(axis.text.x = element_blank())
+```
+
+Jak widać wulgarność utworu nie przekłada się na negatywny odbiór, czego wstępnie można było się spodziewać. Wyznaczmy jednak średnią pozytywności dla utworów wulgarnych i niewulgarnych, żeby móc to lepiej zaobserwować.
+
+```{r}
+utwory %>%
+  select(Wulgarnosc, Pozytywnosc) %>%
+  group_by(Wulgarnosc) %>%
+  summarize(ŚREDNIA = mean(Pozytywnosc))
+```
+
+Rzeczywiście na podstawie otrzymanej statystyki możemy stwierdzić, że wulgarność utworów muzycznych zupełnie nie wpływa na odbiór słuchaczy.
+
+# Pytanie 6.
+
+Przechodzimy do głębszej analizy poszczególnych zależności między zmiennymi. W kolejnej części odpowiem na pytanie: Czy istnieje jakaś zależność miedzy skalą lub kluczem, a popularnością?
+
+Żeby móc odpowiedzieć na to pytanie wpierw spójrzmy jak wygląda rozkład liczby utworów w zależności od klucza i skali. 
+
+Będę chciał stworzyć wykres kolumnowy w podziale na skalę, gdzie kolor będzie określany przez `Klucz`. W tym celu muszę najpierw stworzyc wektor 12 kolorów. Wykorzystuję do tego pakiet `RColorBrewer`.
+
+```{r}
+paleta <- c(brewer.pal(11, "RdYlBu"), "black")
+```
+
+Następnie stworzony wektor kolorów wykorzystuję do zbudowania wykresu.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_bar(aes(x = Skala, fill = Klucz),
+           color = "white", 
+           position = "dodge2") +
+  theme_light() +
+  scale_fill_manual(values = paleta) +
+  labs(title = "Ilość utworów w skali w zależności od klucza",
+       x = "Skala",
+       y = "Ilość")
+```
+
+Widzimy, że w skali minorowej dominują gamy:
+
+* H
+
+* F
+
+* C#
+
+Oraz w skali majorowej:
+
+* C#
+
+* G
+
+* C
+
+Wynika to najprawdopodobniej z uwagi na to, że w tych gamach większości artystów łatwiej jest tworzyć utwory wokalne, które są skierowane do szerokiej publiki.
+
+Zastanówmy się zatem, czy popularność utworów zmienia się w zależności od skali. Wobec tego tworzymy wykresy gęstości.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_density(aes(x = Popularnosc),
+               color = "darkblue",
+               fill = "lightblue") + 
+  facet_wrap(~ Skala, nrow = 2)+
+  theme_light() +
+  labs(title = "Popularność utworów w zależności od skali",
+       x = "Popularność",
+       y = "")
+```
+
+Wykresy wspieramy dodatkowo statystykami opisowymi.
+
+```{r}
+utwory %>%
+  select(Skala, Popularnosc) %>%
+  group_by(Skala) %>%
+  summarize(ŚREDNIA = mean(Popularnosc),
+            MINIMUM = min(Popularnosc),
+            MAKSIMUM = max(Popularnosc))
+```
+
+Na podstawie wykresu i statystyk opisowych możemy stwierdzić, że popularność nie zależy od skali utworu.
+
+Może jednak istnieje związek pomiędzy popularnością utworu, a kluczem w którym został skomponowany. Ponownie tworzymy odpowiednie wykresy i statystyki opisowe.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_density(aes(x = Popularnosc),
+               color = "darkgreen",
+               fill = "lightgreen") + 
+  facet_wrap(~ Klucz, ncol = 3) +
+  theme_light() +
+  labs(title = "Popularność utworów w zależności od skali",
+       x = "Popularność",
+       y = "")
+```
+
+```{r}
+utwory %>%
+  select(Klucz, Popularnosc) %>%
+  group_by(Klucz) %>%
+  summarize(ŚREDNIA = mean(Popularnosc),
+            MEDIANA = median(Popularnosc),
+            ODCHYLENIE = sd(Popularnosc))
+```
+
+Jak widać średnie wartości praktycznie nie różnią się od siebie, jednak odchylaja się w najmniejszy sposób dla gamy 8 czyli G#, a najbardziej dla gamy 10 czyli A#.
+
+Mimo to nie są to znaczne różnice, więc nie możemy jednoznacznie stwierdzic o dużej zależności pomiędzy popularnością, a kluczem lub skalą utworu.
+
+# Pytanie 7.
+
+Kolejna część zostanie poświęcona pytaniu: Co wpływa na pozytywne odczucia słuchaczy? W tym celu na samym początku tworzę macierz korelacji wyznaczając wsp. korelacji rang Spearmana, a następnie odpowiednio to wizualizuję.
+
+```{r}
+korelacje <- cor(utwory[, c("Czas_trwania", "Popularnosc", "Tanecznosc", "Energicznosc",
+                            "Glosnosc", "Slowa_mowione", "Akustycznosc", "Instrumentalnosc",
+                            "BPM", "Pozytywnosc")],
+                 method = "spearman")
+round(korelacje, 2)
+corrplot(korelacje, method = "square", type = "upper") 
+```
+
+Widzimy wysoką zależność pomiędzy zmiennymi `Pozytywnosc`, a `Tanecznosc`. Przyjrzyjmy się tej zależności za pomocą wykresu punktowego.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_point(aes(x = Tanecznosc, y = Pozytywnosc), 
+             size = 2, 
+             color = "darkgreen", 
+             alpha = 0.3) +
+  theme_light() +
+  labs(title = "Związek między pozytywnością i tanecznością utworu",
+       x = "Taneczność",
+       y = "Pozytywność")
+```
+
+Widzimy, że faktycznie im bardziej utwór jest taneczny, tym bardziej przekłada się na pozytywny odbiór słuchaczy.
+
+Ponadto tablica korelacji sugeruje nam zależność ze zmienną `Energicznosc`. Przyjrzyjmy się tej zależności za pomocą wykresów pudełkowych w zależności od kategorii pozytywności.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_boxplot(aes(x = reorder(Pozytywnosc_kat, Energicznosc), y = Energicznosc)) +
+  theme_light() +
+  labs(title = "Pozytywność utworu, a jego energiczność",
+       x = "Pozytywność",
+       y = "Energiczność")
+```
+
+Ponownie możemy stwierdzić, że im bardziej utwór jest energiczny tym bardziej pozytywnie jest odbierany.
+
+Oprócz bezpośredniego związku ze zmienna `Pozytywnosc`, możemy również zauważyć silną zależność między zmiennymi `Glosnosc`, a `Energicznosc`, która wykazaliśmy, że jest również powiązana ze zmienną `Pozytywnosc`.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_point(aes(x = Glosnosc, y = Energicznosc),
+             size = 2, 
+             color = "darkblue", 
+             alpha = 0.2) +
+  theme_light() +
+  labs(title = "Związek między głośnością i energicznością utworu",
+       x = "Głośność",
+       y = "Energiczność")
+```
+
+Ten sam związek pokażmy w zależności od kategorii pozytywności.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_point(aes(x = Glosnosc, y = Energicznosc, color = Pozytywnosc_kat),
+             size = 2) + 
+  theme_light() +
+  scale_color_manual(values = c("magenta4", "orchid", "mistyrose", "lightgreen", "darkgreen")) +
+  labs(title = "Pozytywność utworu w zależności od głośności i energiczności",
+       x = "Głośność",
+       y = "Energiczność",
+       color = "Pozytywność")
+```
+
+Wykres wyraźnie prezentuje zależność między zmiennymi `Pozytywnosc` i `Glosnosc`. Dodatkowo wyznaczmy jeszcze statystyki opisowe.
+
+```{r}
+utwory %>%
+  select(Pozytywnosc_kat, Glosnosc) %>%
+  group_by(Pozytywnosc_kat) %>%
+  summarize(ŚREDNIA = mean(Glosnosc),
+            MEDIANA = median(Glosnosc),
+            ODCHYLENIE = sd(Glosnosc),
+            MINIMUM = min(Glosnosc),
+            MAKSIMUM = max(Glosnosc))
+```
+
+Widzimy, że im niższa wartość zmiennej `Glosnosc` tym większa pozytywność utworu. Oznacza to, że głośniejsze utwory maja bezpośrednie przełożenie na pozytywny odbiór muzyki, w przeciwieństwie do cichych.
+
+Na sam koniec spójrzmy jeszcze w jaki sposób długość utworu wpływa na jego odbiór.
+
+```{r}
+utwory %>% 
+  ggplot() +
+  geom_boxplot(aes(x = Pozytywnosc_kat, y = Czas_trwania)) +
+  theme_light() +
+  labs(title = "Czas trwania w zależności od kategorii pozytywności",
+       x = "Pozytywność",
+       y = "Czas trwania")
+```
+
+Możemy zaobserwować, że nie ma tutaj dużych zależności, jednak jesteśmy w stanie powiedzieć, że dłuższe utwory negatywnie wpływają na odbiór.
+
+# Pytanie 8.
+
+Skupmy się jeszcze na zmiennej `Tanecznosc` i zastanówmy się czy istnieją jakieś zależności z innymi zmiennymi. Zacznijmy od analizy zależności tempem utworu.
+
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_point(aes(x = Tanecznosc, y = BPM),
+             color = "lightsalmon4",
+             alpha = 0.4) +
+  theme_light() +
+  labs(title = "Zależność między tempem, a tanecznością",
+       x = "Taneczność",
+       y = "BPM")
+```
+
+Na podstawie wykresu możemy stwierdzić, że najchętniej słuchacze tańczą do muzyki o tempie w przedziale około 90-130 uderzeń na minutę.
+
+Zastanówmy się zatem, czy większa chęć do tańca wiąże się bezpośrednio z mniej energicznymi utworami, czy może jednak istnieje tendencja do tańczenia przy muzyce znacznie dynamicznej.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_point(aes(x = Tanecznosc, y = Energicznosc),
+             color = "deeppink4",
+             alpha = 0.4) +
+  theme_light() +
+  labs(title = "Związek między tanecznością i energicznością utworu",
+       x = "Taneczność",
+       y = "Energiczność")
+```
+
+Możemy wyciągnąć wnioski, że faktycznie im bardziej energiczny utwór, tym większa chęć do tańca wśród słuchaczy.
+
+Na sam koniec spójrzmy jeszcze raz na zależności pomiędzy tanecznością, a pozytywnością utworu. Tym razem rozważmy analizę wykresów pudełkowych.
+
+```{r}
+utwory %>%
+  ggplot() +
+  geom_boxplot(aes(x = reorder(Pozytywnosc_kat, Tanecznosc), y = Tanecznosc)) +
+  theme_light() +
+  labs(title = "Związek między pozytywnością i tanecznością utworu",
+       x = "Pozytywność",
+       y = "Taneczność")
+```
+
+Widzimy, że zasadniczo utwory pozytywne, czyli takie, które są odbierane jako wesołe i radosne zdecydowanie mają wpływ na zmienną `Tanecznosc`. Im bardziej pozytywny charakter utworu, tym większa chęć do tańca słuchaczy.
+
+# Zakończenie
+
+Powyższa analiza danych sprawiła mi wiele przyjemności oraz jednocześnie pozwoliła na pogłębienie wiedzy i umiejętności w zakresie formatowania, odpowiedniego selekcjonowania, a także wizualizowania danych. 
+
+Dowiedziałem się wielu ciekawych rzeczy jak np. informacje dotyczące najpopularniejszych artystów czy utworów z lat 1999-2019. Ponadto ku wielkiemu zdziwieniu zobaczyłem, że treści wulgarne nie wpływają na odbiór utworu przez słuchaczy. Oprócz stricte wniosków płynących z analizy wykresów i statystyk, poprzez długie przygotowania dowiedziałem się wielu informacji dotyczących skal i gam muzycznych, w których komponuje się utwory. Przygotowany zestaw pozwolił mi również zrozumieć i poznać wartości wpływające na charakter pozytywności danego utworu oraz cechy warunkujące chęć słuchaczy do tańca.
+
+Projekt eksploracyjnej analizy danych umożliwił mi zgłębienie wiedzy nie tylko na płaszczyźnie statystyki, programowania w języku R, ale również na płaszczyźnie życia codziennego. Wierzę, że zdobyte umiejętności zostaną ze mną na długo i w przyszłości jeszcze będę miał okazję je wykorzystać.
