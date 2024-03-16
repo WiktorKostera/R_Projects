@@ -13,4 +13,4 @@ WstepDoAnalizyDanych - ćwiczenia:
 Shiny App:
 - it's my second project that I made in R language. It was created for purpose of R programming classes
   where I had to make a Shiny App and .rmd presentation. At this project I managed to learn what
-  is ANOVA and how can I use it for purposes of data analysis.
+  ANOVA is and how can I use it for the purposes of data analysis.
