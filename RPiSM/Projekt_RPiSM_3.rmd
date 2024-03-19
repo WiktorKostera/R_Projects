@@ -1,0 +1,627 @@
+---
+title: "Projekt RPiSM 3"
+author: "Natalia Kargól, Filip Regulski, Wiktor Kostera"
+date: "styczeń 2024"
+output: 
+  html_document:    
+    theme: cerulean
+    toc: true
+    highlight: tango
+    toc_float: true
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{r echo=FALSE, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(psych)
+set.seed(10)
+```
+
+# Wstęp
+
+Celem projektu jest zbadanie własności estymatorów Metody Największej Wiarygodności parametrów rozkładu Beta.
+
+# Charakterystyka rozkładu Beta
+
+Rozkład Beta to rodzina rozkładów prawdopodobieństw zdefiniowanych na przedziale [0,1]. Posiada on dwa dodatnie parametry rzeczywiste odpowiadające za kształt rozkładu:
+
+-   $\alpha$ - im wyższą wartość przyjmuje ten parametr, tym wartości losowe są bardziej skupione w okolicach 1
+-   $\beta$ - im wyższe wartości parametru, tym wartości losowe są bliższe 0
+
+# Funkcje
+
+Lista użytych przez nas funkcji:
+
+-   obliczanie funkcji wiarygodności, estymacja parametrów za pomocą funkcji optim() i tworzenie rozkładu estymowanych parametrów
+
+```{r}
+rozklady <- function(ilosc, parametr1, parametr2) {
+  funkcja_wiar <- function(parametry, dane) {
+    -sum(dbeta(dane, shape1 = parametry[1], shape2 = parametry[2], log = TRUE))
+  }
+  tabelka <- data.frame(shape1 = numeric(), shape2 = numeric())
+  for(i in 1:300) {
+    przykladowe <- rbeta(ilosc, parametr1, parametr2)
+    parametry <- c(parametr1, parametr2)
+    wynik_optim <- optim(par = parametry, fn = funkcja_wiar, dane = przykladowe, lower = c(0.1,0.1), upper = c(20,20), method = "L-BFGS-B")
+    tabelka <- rbind(tabelka, wynik_optim$par)    
+  }
+  colnames(tabelka) <- c("shape1", "shape2")   
+  tabelka <- tabelka %>%
+    mutate(`Liczba danych` = as.numeric(ilosc),
+           roznica_s1 = abs(parametr1 - shape1),
+           roznica_s2 = abs(parametr2 - shape2))
+  return(tabelka)
+}
+```
+
+-   tworzenie statystyk opisowych dla estymowanych parametrów w zależności od ilości danych oraz weryfikacji zgodności danych z rozkładem normalnym
+
+```{r}
+statystyki <- function(dane, nr) {
+  dane %>%
+    group_by(`Liczba danych`) %>%
+    summarize(
+      "Średnia" = round(mean(.data[[nr]]), 5),
+      "Odchylenie std." = round(sd(.data[[nr]]), 5),
+      "Skośność" = round(skew(.data[[nr]]), 5),
+      "Kurtoza" = round(kurtosi(.data[[nr]]), 5),
+      "Minimum" = round(min(.data[[nr]]), 5),
+      "Maximum" = round(max(.data[[nr]]), 5),
+      "Rozkład normalny" = ifelse(shapiro.test(.data[[nr]])$p.value > 0.05, "Tak", "Nie"))
+}
+```
+
+-   funkcja do obliczania różnic pomiędzy estymowanymi parametrami, a rzeczywistymi wartościami
+
+```{r}
+roznice <- function(dane) {
+  dane <- dane %>%
+    group_by(`Liczba danych`) %>%
+    summarize(alpha = mean(roznica_s1),
+              beta = mean(roznica_s2))
+  return(dane)
+}
+```
+
+# Wykresy gęstości analizowanych wariantów rozkładu Beta
+
+```{r echo=FALSE}
+dane05_05 <- rbeta(100000, 0.5, 0.5)
+dane5_1 <- rbeta(100000, 5, 1)
+dane2_2 <- rbeta(100000, 2, 2)
+dane2_5 <- rbeta(100000, 2, 5)
+ramkadowykresu <- data.frame(Dane = c(dane05_05, dane5_1, dane2_2, dane2_5),
+                             Wariant = rep(c("I", "II", "III", "IV"), each = 100000))
+ramkadowykresu %>%
+  ggplot() +
+  geom_density(aes(x = Dane, fill = Wariant),
+               alpha = 0.5) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c("red", "green", "blue", "purple")) +
+  labs(title = "Krzywe gęstości dla różnych wariantów",
+       x = "Wartości", 
+       y = "Gęstość")
+```
+
+# **Wariant I**
+
+W pierwszym wariancie analizie poddamy estymator dla rozkładu beta o parametrach $\alpha$=0.5 oraz $\beta$=0.5.
+
+## Wykres gęstości
+
+```{r echo=FALSE}
+ggplot() +
+geom_density(aes(x = dane05_05),
+             color = "darkred",
+             fill = "red",
+             alpha = 0.5) +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres gęstości - Wariant I",
+       x = "Wartości", 
+       y = "Gęstość")
+```
+
+## Parametr kształtu alpha
+
+W poniższych tabelach oraz wykresach przedstawiono zachowanie estymatorów parametru alfa w zależności od liczby danych. Jest przedstawiony również wynik testu Shapiro-Wilka, który sprawdza, czy rozkład estymatorów jest rozkładem normalnym. 
+
+```{r}
+rozklady5_05_05 <- rozklady(5, 0.5, 0.5)
+rozklady20_05_05 <- rozklady(20, 0.5, 0.5)
+rozklady50_05_05 <- rozklady(50, 0.5, 0.5)
+rozklady100_05_05 <- rozklady(100, 0.5, 0.5)
+rozklady500_05_05 <- rozklady(500, 0.5, 0.5)
+rozklady1000_05_05 <- rozklady(1000, 0.5, 0.5)
+
+wyniki1 <- rbind(rozklady5_05_05, rozklady20_05_05, rozklady50_05_05,
+                   rozklady100_05_05, rozklady500_05_05, rozklady1000_05_05)
+
+statystyki(wyniki1, "shape1")
+```
+
+```{r echo=FALSE}
+wyniki1 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape1),
+               color = "darkred") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki1 %>%
+  ggplot() +
+  geom_density(aes(x = shape1),
+               color = "darkred",
+               fill = "red",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Parametr kształtu beta
+
+W poniższych tabelach oraz wykresach przedstawiono zachowanie estymatorów parametru beta w zależności od liczby danych. Jest przedstawiony również wynik testu Shapiro-Wilka, który sprawdza, czy rozkład estymatorów jest rozkładem normalnym. 
+
+```{r}
+statystyki(wyniki1, "shape2")
+```
+
+```{r, echo=FALSE}
+wyniki1 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape2),
+               color = "darkred") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r}
+wyniki1 %>%
+  ggplot() +
+  geom_density(aes(x = shape2),
+               color = "darkred",
+               fill = "red",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Różnice względem rzeczywistych wartości
+
+```{r}
+roznice(wyniki1)
+```
+
+Jak możemy zaobserwować wraz ze wzrostem ilości danych, średnia zbliża się do wartości oczekiwanej estymatora $\alpha$ równej 0.5 oraz $\beta$ równej 0.5. Rzuca się jedynie w oczy średnia dla estymatora z 5 danymi, ponieważ znacząco odbiega od pozostałych wartości. 
+
+Z tabeli dla różnic względem rzecziwistych wartości możemy jasno wywnioskować, że im więcej danych weźmiemy, tym większą dokładność estymatora otrzymamy, ponieważ różnice pomiędzy wartością estymowaną, a oczekiwaną są coraz mniejsze.
+
+# **Wariant II**
+
+W drugim wariancie analizie poddamy estymator dla rozkładu beta o parametrach $\alpha$=5 oraz $\beta$=1.
+
+
+## Wykres gęstości
+
+```{r echo=FALSE}
+ggplot() +
+  geom_density(aes(x = dane5_1),
+               color = "darkgreen",
+               fill = "green",
+               alpha = 0.5) +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres gęstości - Wariant II",
+       x = "Wartości", 
+       y = "Gęstość")
+```
+
+## Parametr kształtu alpha
+
+```{r echo=FALSE}
+rozklady5_5_1 <- rozklady(5, 5, 1)
+rozklady20_5_1 <- rozklady(20, 5, 1)
+rozklady50_5_1 <- rozklady(50, 5, 1)
+rozklady100_5_1 <- rozklady(100, 5, 1)
+rozklady500_5_1 <- rozklady(500, 5, 1)
+rozklady1000_5_1 <- rozklady(1000, 5, 1)
+
+wyniki2 <- rbind(rozklady5_5_1, rozklady20_5_1, rozklady50_5_1,
+                 rozklady100_5_1, rozklady500_5_1, rozklady1000_5_1)
+
+statystyki(wyniki2, "shape1")
+```
+
+```{r echo=FALSE}
+wyniki2 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape1),
+               color = "darkgreen") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki2 %>%
+  ggplot() +
+  geom_density(aes(x = shape1),
+               color = "darkgreen",
+               fill = "green",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+Można zauważyć że zwiększenie liczby danych przekłada się na bardziej stabilne, precyzyjne i symetryczne estymacje parametrów alpha i beta w rozkładzie beta. Zarówno rozkład estymacji alpha, jak i beta, dla większych prób, wydaje się zbliżać do rozkładu normalnego.
+Obserwuje się poprawę dokładności oszacowania oraz bardziej zbliżony do normalnego rozkład estymacji parametrów alpha i beta w miarę zwiększania liczby danych.
+
+## Parametr kształtu beta
+
+```{r echo=FALSE}
+statystyki(wyniki2, "shape2")
+```
+
+```{r echo=FALSE}
+wyniki2 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape2),
+               color = "darkgreen") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki2 %>%
+  ggplot() +
+  geom_density(aes(x = shape2),
+               color = "darkgreen",
+               fill = "green",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Różnice względem rzeczywistych wartości
+
+```{r echo=FALSE}
+roznice(wyniki2)
+```
+
+Z analizy przedstawionej tabeli wynika, że zwiększanie liczby danych wpływa korzystnie na precyzję naszego estymatora. Wraz ze wzrostem ilości danych, obserwujemy tendencję do zmniejszania się rozbieżności między estymowanymi parametrami, a ich rzeczywistymi wartościami. 
+
+# **Wariant III**
+
+W kolejnym wariancie analizie poddamy estymator dla rozkładu beta o parametrach $\alpha$=2 oraz $\beta$=2.
+
+## Wykres gęstości
+
+```{r echo=FALSE}
+ggplot() +
+  geom_density(aes(x = dane2_2),
+               color = "darkblue",
+               fill = "blue",
+               alpha = 0.5) +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres gęstości - Wariant III",
+       x = "Wartości", 
+       y = "Gęstość")
+```
+
+## Parametr kształtu alpha
+
+```{r echo=FALSE}
+rozklady5_2_2 <- rozklady(5, 2, 2)
+rozklady20_2_2 <- rozklady(20, 2, 2)
+rozklady50_2_2 <- rozklady(50, 2, 2)
+rozklady100_2_2 <- rozklady(100, 2, 2)
+rozklady500_2_2 <- rozklady(500, 2, 2)
+rozklady1000_2_2 <- rozklady(1000, 2, 2)
+
+wyniki3 <- rbind(rozklady5_2_2, rozklady20_2_2, rozklady50_2_2,
+                 rozklady100_2_2, rozklady500_2_2, rozklady1000_2_2)
+
+statystyki(wyniki3, "shape1")
+```
+
+```{r echo=FALSE}
+wyniki3 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape1),
+               color = "darkblue") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki3 %>%
+  ggplot() +
+  geom_density(aes(x = shape1),
+               color = "darkblue",
+               fill = "blue",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+
+
+## Parametr kształtu beta
+
+```{r echo=FALSE}
+statystyki(wyniki3, "shape2")
+```
+
+```{r echo=FALSE}
+wyniki3 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape2),
+               color = "darkblue") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki3 %>%
+  ggplot() +
+  geom_density(aes(x = shape2),
+               color = "darkblue",
+               fill = "blue",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Różnice względem rzeczywistych wartości
+
+```{r echo=FALSE}
+roznice(wyniki3)
+```
+
+Dla większych prób danych obserwuje się poprawę dokładności oszacowania zarówno dla parametru kształtu alpha, jak i beta w rozkładzie beta. Średnie estymacje maleją, co wskazuje na bardziej stabilne i skoncentrowane wyniki. Jednocześnie odchylenie standardowe maleje, co świadczy o zmniejszającej się zmienności estymacji. Skośność i kurtoza również maleją, sugerując mniejszy wpływ asymetrii i ekstremalnych ogonów na rozkład estymacji.
+
+Zarówno wykresy pudełkowe, jak i gęstości dla większych prób wykazują mniejszą zmienność estymacji oraz zbliżenie rozkładu estymacji do rozkładu normalnego. Wartości mediany są bardziej skoncentrowane, a skrzynie na wykresach pudełkowych są węższe dla większych prób.
+
+Podsumowując, zwiększenie liczby danych przekłada się na bardziej stabilne, precyzyjne i symetryczne estymacje parametrów alpha i beta w rozkładzie beta. Oba rozkłady estymacji, zarówno dla alpha, jak i beta, dla większych prób wydają się zbliżać do rozkładu normalnego.
+
+# **Wariant IV**
+
+W ostatnim wariancie analizie poddamy estymator dla rozkładu beta o parametrach $\alpha$=2 oraz $\beta$=5.
+
+## Wykres gęstości
+
+```{r echo=FALSE}
+ggplot() +
+  geom_density(aes(x = dane2_5),
+               color = "darkorchid4",
+               fill = "purple",
+               alpha = 0.5) +  
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres gęstości - Wariant IV",
+       x = "Wartości", 
+       y = "Gęstość")
+```
+
+## Parametr kształtu alpha
+
+```{r echo=FALSE}
+rozklady5_2_5 <- rozklady(5, 2, 5)
+rozklady20_2_5 <- rozklady(20, 2, 5)
+rozklady50_2_5 <- rozklady(50, 2, 5)
+rozklady100_2_5 <- rozklady(100, 2, 5)
+rozklady500_2_5 <- rozklady(500, 2, 5)
+rozklady1000_2_5 <- rozklady(1000, 2, 5)
+
+wyniki4 <- rbind(rozklady5_2_5, rozklady20_2_5, rozklady50_2_5,
+                 rozklady100_2_5, rozklady500_2_5, rozklady1000_2_5)
+
+statystyki(wyniki4, "shape1")
+```
+
+```{r echo=FALSE}
+wyniki4 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape1),
+               color = "darkorchid4") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki4 %>%
+  ggplot() +
+  geom_density(aes(x = shape1),
+               color = "darkorchid4",
+               fill = "purple",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Parametr kształtu beta
+
+```{r echo=FALSE}
+statystyki(wyniki4, "shape2")
+```
+
+```{r echo=FALSE}
+wyniki4 %>%
+  ggplot() +
+  geom_boxplot(aes(x = shape2),
+               color = "darkorchid4") +
+  coord_flip() +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres pudełkowe\nw zależności od liczby danych",
+       x = "Wartości")
+```
+
+```{r echo=FALSE}
+wyniki4 %>%
+  ggplot() +
+  geom_density(aes(x = shape2),
+               color = "darkorchid4",
+               fill = "purple",
+               alpha = 0.5) +
+  facet_wrap(~ `Liczba danych`, scales = "free") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "gray30"),
+        strip.text = element_text(color = "white"),
+        panel.spacing = unit(1, "lines"),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Wykres gęstości\nw zależności od liczby danych",
+       x = "Wartości",
+       y = "Gęstość")
+```
+
+## Różnice względem rzeczywistych wartości
+
+```{r echo=FALSE}
+roznice(wyniki4)
+```
+
+Podobnie jak w poprzednim wypadku (alpha = 2, beta = 2), dla obu parametrów (alpha = 2, beta = 5) zwiększenie liczby danych przekłada się na bardziej stabilne, precyzyjne i symetryczne estymacje. Zarówno rozkład estymacji alpha, jak i beta, dla większych prób, wydaje się zbliżać do rozkładu normalnego. Skoncentrowanie się rozkładów wokół wartości średnich, zmniejszenie zmienności estymacji i bardziej stabilne mediany na wykresach pudełkowych potwierdzają poprawę dokładności oszacowania parametrów rozkładu beta. 
+
+# Wnioski
+
+Ogólnie rzecz biorąc, dokładność oszacowania parametrów rozkładu beta rośnie w miarę zwiększania liczby danych. Wartości estymatorów stają się bardziej stabilne i zbliżają się do rzeczywistych wartości parametrów dla większych prób.
+Dla małych prób (np. 5) estymatory mogą wykazywać większą zmienność i odchylenie od rzeczywistych wartości. W miarę wzrostu liczby danych, rozkład oszacowań parametrów wydaje się bardziej przypominać rozkład normalny, co potwierdzają wyniki naszych badań. 
+
+
+Patrząc na wyniki dla poszczególnych wartości parametrów, możemy przede wszystkim stwierdzić, że dla danych pochodzących z rozkładu z większymi wartościami parametrów maleje dokładność oszacowanych parametrów względem rzeczywistych wartości. Przykładowo dla rozkładów gdzie estymujemy parametr Beta w przypadku rzeczywistej wartości równej 5 największa dokładność wynosi 0.18 podczas gdy dla wartości 0.5 wynosi 0.016. Podobne wnioski możemy wyciągnąć patrząc na poszczególne wartości odchyleń standardowych - im większe rzeczywiste wartości parametrów, tym bardziej średnio odchylają się wartości.

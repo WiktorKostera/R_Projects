@@ -1,0 +1,1528 @@
+---
+title: "Projekt RPiSM 1"
+author: "Natalia Kargól, Filip Regulski, Wiktor Kostera"
+date: "Grudzień 2023"
+output: 
+  html_document:    
+    theme: cerulean
+    toc: true
+    highlight: tango
+    toc_float: true
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{r, echo=FALSE, message=FALSE}
+library(psych)
+library(ggplot2)
+library(dplyr)
+```
+
+# Wprowadzenie
+
+Przyjmujemy poziom istotności równy 0,05. 
+
+Dla zachowania spójności wyników ustawiamy wartość parametru set.seed = 13,
+co eliminuje losowość w generowaniu danych. 
+
+```{r}
+set.seed(13)
+```
+
+Niniejszy projekt ma na celu zbadanie zachowania się rozkładu trzystu średnich arytmetycznych, powstałych poprzez wygenerowanie K-elementów z rozkładu Poissona. Badanie zostało przeprowadzone dla rozkładu Poissona z parametrem lambda równym 1 oraz 40 oraz dla danych z takimi samymi parametrami, które następnie zostały podniesione do kwadratu. Powyższą analizę przeprowadzimy w oparciu o liczne statystyki opisowe oraz wizualizacje, do których należą wykresy pudełkowe oraz histogramy. Oprócz tego, korzystając z wbudowanej w pakiet R funkcji testu Shapiro-Wilka, sprawdzimy, czy średnie w zależności od wyżej wymienionych parametrów posiadają cechy rozkładu normalnego.
+
+# Omówienie rozkładów
+
+## Rozkład Poissona z parametrem lambda = 1
+
+```{r}
+ex <- 1
+odchylenie <- 1
+skosnosc <- 1
+kurtoza <- 1
+```
+
+```{r, echo=FALSE}
+cat("Wartość oczekiwana: ", ex)
+cat("Odchylenie standardowe: ", odchylenie)
+cat("Współczynnik skośności: ", skosnosc)
+cat("Kurtoza: ", kurtoza)
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x = 0:20, y = dpois(0:20, 1)),
+             color = "darkblue") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres prawdopodobieństw dla wartości 0-20 \n w rozkładzie Poissona z lambda = 1",
+       x = "Wartości",
+       y = "Prawdopodobieństwo")
+```
+
+Na wykresie prawdopodobieństw dla rozkładu Poissona z parametrem lambda równym 1, możemy zauważyć, że najwyższe prawdopodobieństwo występuje w okolicach wartości 1, co jest zgodne z oczekiwaniami, gdyż lambda oznacza średnią liczbę zdarzeń w danym przedziale czasowym lub przestrzennym. Wykres jest asymetryczny i opada szybko, co odzwierciedla charakterystykę rozkładu Poissona, który jest szczególnie skoncentrowany wokół swojej średniej.
+
+## Rozkład Poissona z parametrem lambda = 40
+
+```{r}
+ex <- 40
+odchylenie <- sqrt(40)
+skosnosc <- 1/sqrt(40)
+kurtoza <- 1/40
+```
+
+```{r, echo=FALSE}
+cat("Wartość oczekiwana: ", ex)
+cat("Odchylenie standardowe: ", odchylenie)
+cat("Współczynnik skośności: ", skosnosc)
+cat("Kurtoza: ", kurtoza)
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x = 20:60, y = dpois(20:60, 40)),
+             color = "darkgreen") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres prawdopodobieństw dla wartości 20-60 \n w rozkładzie Poissona z lambda = 40",
+       x = "Wartości",
+       y = "Prawdopodobieństwo")
+```
+
+Ze względu na fakt, że lambda jest równa 40, wyżej przedstawiony wykres uwzględnia tylko wartości od 20 do 60, ponieważ zdecydowana większość prawodopodobieństwa zawiera się na tym przedziale. Na wykresie prawdopodobieństw możemy zauważyć, że najwyższe prawdopodobieństwo występuje w okolicach wartości 40, co jest zgodne z wartością oczekiwaną rozkładu Poissona równą lambda. Ponadto wykres na tym przedziale jest symetryczny względem tej wartości.   
+
+## Rozkład Poissona z parametrem lambda = 1 podniesiony do kwadratu
+
+```{r}
+x <- rpois(10000, 1)^2
+
+ex <- mean(x)
+odchylenie <- sd(x)
+skosnosc <- skew(x)
+kurtoza <- kurtosi(x)
+```
+
+```{r, echo=FALSE}
+cat("Wartość oczekiwana: ", ex)
+cat("Odchylenie standardowe: ", odchylenie)
+cat("Współczynnik skośności: ", skosnosc)
+cat("Kurtoza: ", kurtoza)
+```
+
+```{r}
+prawd <- table(x)/10000
+prawd
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x = as.numeric(names(prawd)), y = as.numeric(prawd)),
+             color = "lightgoldenrod4") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres prawdopodobieństw dla wartości w rozkładzie Poissona \n z lambda = 1, podniesionych do kwadratu",
+       x = "Wartości",
+       y = "Prawdopodobieństwo")
+```
+
+Wykres prawdopodobieństw dla kwadratów wartości z rozkładu Poissona z lambda równym 1 ukazuje, że mniejsze wartości są bardziej prawdopodobne, podczas gdy większe wartości mają znacznie niższe prawdopodobieństwo. Skupienie prawdopodobieństw w okolicach małych wartości podkreśla, że rozkład ten jest skoncentrowany wokół swojej średniej. Podniesienie do kwadratu wartości zwiększyło ekspozycję na wartości bliskie zeru i wygładziło rozkład, nadając mu bardziej wyraźny kształt. 
+
+## Rozkład Poissona z parametrem lambda = 40 podniesiony do kwadratu
+
+```{r}
+x <- rpois(10000, 40)^2
+
+ex <- mean(x)
+odchylenie <- sd(x)
+skosnosc <- skew(x)
+kurtoza <- kurtosi(x)
+```
+
+```{r, echo=FALSE}
+cat("Wartość oczekiwana: ", ex)
+cat("Odchylenie standardowe: ", odchylenie)
+cat("Współczynnik skośności: ", skosnosc)
+cat("Kurtoza: ", kurtoza)
+```
+
+```{r}
+prawd <- table(x)/10000
+prawd
+```
+
+```{r}
+ggplot() +
+  geom_point(aes(x = as.numeric(names(prawd)), y = as.numeric(prawd)),
+             color = "indianred4") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres prawdopodobieństw dla wartości w rozkładzie Poissona \n z lambda = 40, podniesionych do kwadratu",
+       x = "Wartości",
+       y = "Prawdopodobieństwo")
+```
+
+Wykres prawdopodobieństw dla kwadratów wartości z rozkładu Poissona z lambda równym 40 ukazuje, że wartości przyjmujące najwyższe prawopodobieństwa znajdują się w okolicach 1600, co jest zgodne z wartością oczekiwaną rozkładu Poissona dla takiego parametru lambda, wynoszącą ≈ 1651. Podniesienie do kwadratu wartości sprawiło, że rozkład stracił wcześniejszą symetryczność.   
+
+# Legenda oznaczeń - stosowane funkcje i zmienne
+
+**FUNKCJE**
+
+* `dane_los` - funkcja tworzy listę 300 elementów, gdzie każdy element składa się z K danych pochodzących z rozkładu Poissona (z lambda = 1 lub 40)
+
+* `dane_los_kwadrat` - funkcja tworzy listę 300 elementów, gdzie każdy element składa się z K danych pochodzących z rozkładu Poissona (z lambda = 1 lub 40) podniesionych do kwadratu
+
+* `statystyki` - funkcja tworzy statystyki opisowe dla rozkładu średnich 
+
+* `pudelkowy` - funkcja tworzy wykres pudełkowy dla rozkładu średnich
+
+* `histogram` - funkcja tworzy histogram dla rozkładu średnich
+
+* `shapiro.test` - funkcja przeprowadzająca test normalności dla rozkładu średnich 
+
+**ZMIENNE**
+
+*W przypadku zwykłych rozkładów*
+
+* `all_dane_x_y` - lista 300 elementów, gdzie każdy element posiada 'x' danych z rozkładu Poissona z lambda = 'y' 
+
+* `srednie_dane_x_y` - wektor (na podstawie listy `all_dane_x_y`) składający się z 300 wartości, gdzie każda wartość to średnia z 'x' danych pochodzących z rozkładu Poissona z lambda = 'y'
+
+* `statystyki_x_y` - statystyki opisowe (średnia, odchylenie, skośność, kurtoza) dla rozkładu średnich `srednie_dane_x_y`
+
+* `zestawienie_z` - zestawienie statystyk opisowych wszystkich rozkładów `srednie_dane_x_y` dla rozkładu Poissona z lambda = 'z'
+
+*W przypadku rozkładów podniesionych do kwadratu*
+
+* `all_dane_kwx_y` - lista 300 elementów, gdzie każdy element posiada 'x' danych z rozkładu Poissona z lambda = 'y' podniesionych do kwadratu
+
+* `srednie_dane_kwx_y` - wektor (na podstawie listy `all_dane_x_y`) składający się z 300 wartości, gdzie każda wartość to średnia z 'x' danych pochodzących z rozkładu Poissona z lambda = 'y'
+
+* `statystyki_kwx_y` - statystyki opisowe (średnia, odchylenie, skośność, kurtoza) dla rozkładu średnich `srednie_dane_kwx_y`
+
+* `zestawienie_kwz` - zestawienie statystyk opisowych wszystkich rozkładów `srednie_dane_x_y` dla rozkładu Poissona z lambda = 'z'
+
+# Definicje funkcji
+
+```{r}
+dane_los <- function(k, lambda) {
+  dane_k <- list()
+  for(i in 1:300) {
+  dane <- rpois(k, lambda)
+  dane_k[[i]] <- dane
+  }
+  return(dane_k)
+}
+```
+
+```{r}
+dane_los_kwadrat <- function(k, lambda) {
+  dane_k <- list()
+  for(i in 1:300) {
+    dane <- rpois(k, lambda)^2
+    dane_k[[i]] <- dane
+  }
+  return(dane_k)
+}
+```
+
+```{r}
+statystyki <- function(srednie) {
+  srednia <- mean(srednie)
+  odchylenie <- sd(srednie)
+  skosnosc <- skew(srednie)
+  kurtoza <- kurtosi(srednie)
+  
+  opisowe <- c(Średnia = srednia, Odchylenie = odchylenie, Skośność = skosnosc, Kurtoza = kurtoza)
+  return(opisowe)
+}
+```
+
+```{r}
+pudelkowy <- function(srednie) {
+  pudelkowy <- ggplot() +
+    geom_boxplot(aes(x = srednie),
+                 color = "darkblue") +
+    coord_flip() +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Wykres pudełkowy",
+         x = "Wartości")
+  return(pudelkowy)
+}
+```
+
+```{r}
+histogram <- function(srednie) {
+  histogram <- ggplot() +
+    geom_histogram(aes(x = srednie),
+                   bins = 10,
+                   color = "darkblue",
+                   fill = "lightblue") +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Histogram",
+         x = "Wartości",
+         y = "Liczba wystąpień")
+  return(histogram)
+}
+```
+
+# Symulacja wyników dla rozkładu Poissona z parametrem lambda = 1
+
+## K = 5
+
+Rozpoczynamy od wygenerowania listy 300 elementów, gdzie każdy element zawiera 5 losowych wartości z rozkładu Poissona o parametrze lambda równym 1. Następnie tworzymy wektor średnich z każdego elementu i na ich podstawie obliczamy statystyki opisowe (średnią, odchylenie standardowe, współczynnik skośności, kurtozę).
+
+```{r}
+all_dane_5_1 <- dane_los(5, 1)
+srednie_dane_5_1 <- sapply(all_dane_5_1, mean)
+
+statystyki_5_1 <- statystyki(srednie_dane_5_1)
+```
+
+Tworzymy wykres pudełkowy i histogram dla średnich wartości.
+
+```{r}
+pudelkowy(srednie_dane_5_1)
+```
+
+```{r}
+histogram(srednie_dane_5_1)
+```
+
+Możemy zauważyć, że histogram nie jest symetryczny, co może wynikać z niewielkiej liczby danych wykorzystanych do obliczenia średniej (K=5), co wpływa na zmienność estymacji. Wykres pudełkowy natomiast ukazuje obecność wartości odstających, co sugeruje, że w próbie istnieją obserwacje znacznie różniące się od reszty danych.
+
+Przejdźmy do sprawdzenia czy średnie mają rozkład normalny. W tym celu skorzystamy z testu Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_5_1)
+```
+
+Test Shapiro-Wilka dla średnich wartości z symulacji rozkładu Poissona z parametrem lambda = 1 i K = 5 wykazał istotne odbieganie od rozkładu normalnego. Niski p-value wskazuje na odrzucenie hipotezy o normalności danych.
+
+## K = 10
+
+Tutaj postępujemy podobnie jak w powyższym przypadku, jedyną różnicą jest wzrost liczby danych wykorzystanych do obliczenia średniej z 5 na 10.
+
+```{r}
+all_dane_10_1 <- dane_los(10, 1)
+srednie_dane_10_1 <- sapply(all_dane_10_1, mean)
+
+statystyki_10_1 <- statystyki(srednie_dane_10_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_10_1)
+```
+
+```{r}
+histogram(srednie_dane_10_1)
+```
+
+Wykres pudełkowy i histogram dla K=10 nie różnią się znacznie od tych dla K=5. Możemy zauważyć wyraźniejszy, bardziej symetryczny kształt rozkładu, ale należałoby wziąć większą liczbę danych do obliczenia średniej, aby móc wyciągnąć dalsze wnioski.
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_10_1)
+```
+
+Jako że p-value jest znacznie niższa niż poziom istotności 0.05, możemy stwierdzić, że rozkład średnich wartości nie jest zgodny z rozkładem normalnym. 
+
+## K = 20
+
+Przeprowadźmy te badania dla 20 danych wykorzystanych do obliczenia średniej.
+
+```{r}
+all_dane_20_1 <- dane_los(20, 1)
+srednie_dane_20_1 <- sapply(all_dane_20_1, mean)
+
+statystyki_20_1 <- statystyki(srednie_dane_20_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_20_1)
+```
+
+```{r}
+histogram(srednie_dane_20_1)
+```
+
+Wykres pudełkowy i histogram dla K=20 ukazują, że zwiększona liczba danych skutkuje mniejszym zróżnicowaniem i szerszym zakresem wartości średnich, co sugeruje, że większa próba bardziej wiarygodnie odzwierciedla tendencje tego rozkładu. Wraz ze wzrostem K obserwujemy również bardziej wyraźny kształt rozkładu, co może przyczynić się do lepszej charakteryzacji jego właściwości dla danej próby. Jednakże, pomimo zwiększenia liczby danych do obliczenia średniej wykres pudełkowy i histogram nadal wykazują pewne niedoskonałości, takie jak asymetria histogramu.
+
+Przeprowadźmy ponownie test Shapiro-Wilka, w celu sprawdzenia czy średnie mają rozkład normalny.
+
+```{r}
+shapiro.test(srednie_dane_20_1)
+```
+
+Ponownie, odrzucamy hipotezę zerową o normalności rozkładu, ponieważ p-value jest niższa niż poziom istotności 0.05. Interpretując ten wynik, możemy stwierdzić, że rozkład średnich wartości nie jest zgodny z rozkładem normalnym. 
+
+## K = 30
+
+Przeprowadźmy te badania dla 30 danych.
+
+```{r}
+all_dane_30_1 <- dane_los(30, 1)
+srednie_dane_30_1 <- sapply(all_dane_30_1, mean)
+
+statystyki_30_1 <- statystyki(srednie_dane_30_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_30_1)
+```
+
+```{r}
+histogram(srednie_dane_30_1)
+```
+
+Histogram ukazuje, że rozkład średnich wartości dla K=30 jest bardziej symetryczny i gładki, co sugeruje zbliżenie do kształtu rozkładu normalnego.Wykres pudełkowy dla K=30 pokazuje skrócenie się pudełka, co świadczy o mniejszym zróżnicowaniu wartości średnich. Linie wąsów są bardziej zbliżone do siebie, co sugeruje mniejszy zakres rozkładu. Te zmiany wskazują na większą stabilność estymacji średniej przy większej liczbie danych. 
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_30_1)
+```
+
+W kontekście testu normalności, p-value jest większa niż tradycyjny poziom istotności 0.05, co sugeruje brak podstaw do odrzucenia hipotezy zerowej o normalności rozkładu. Możemy więc przyjąć, że na podstawie tego testu, rozkład średnich wartości dla K=30 nie różni się znacząco od rozkładu normalnego.
+
+## K = 50
+
+Przeprowadźmy te badania dla 50 danych.
+
+```{r}
+all_dane_50_1 <- dane_los(50, 1)
+srednie_dane_50_1 <- sapply(all_dane_50_1, mean)
+
+statystyki_50_1 <- statystyki(srednie_dane_50_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_50_1)
+```
+
+```{r}
+histogram(srednie_dane_50_1)
+```
+
+Symulacja dla rozkładu Poissona z parametrem lambda równym 1 i k równym 50, przedstawiona na wykresie pudełkowym i histogramie, ukazuje niewielkie zmniejszenie zróżnicowania oraz bardziej symetryczny rozkład średnich wartości w porównaniu do poprzednich symulacji. Wykres pudełkowy przedstawia niewiele bardziej skrócone pudełko i zbliżone do siebie linie wąsów, co świadczy o jeszcze mniejszym zakresie rozkładu.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_50_1)
+```
+
+P-value przekracza tradycyjny poziom istotności 0.05, co sugeruje brak statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Możemy przyjąć, że na podstawie tego testu, rozkład średnich wartości dla K=50 jest zgodny z rozkładem normalnym.
+
+## K = 100
+
+Przeprowadźmy te badania dla 100 danych.
+
+```{r}
+all_dane_100_1 <- dane_los(100, 1)
+srednie_dane_100_1 <- sapply(all_dane_100_1, mean)
+
+statystyki_100_1 <- statystyki(srednie_dane_100_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_100_1)
+```
+
+```{r}
+histogram(srednie_dane_100_1)
+```
+
+Symulacja dla rozkładu Poissona z parametrem lambda równym 1 i K równym 100, przedstawiona na wykresie pudełkowym i histogramie, ukazuje dalsze zmniejszenie zróżnicowania oraz bardziej symetryczny kształt rozkładu średnich wartości w porównaniu do poprzednich symulacji z mniejszą liczbą danych.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_100_1)
+```
+
+P-value przekracza tradycyjny poziom istotności 0.05, co sugeruje brak statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Możemy przyjąć, że na podstawie tego testu, rozkład średnich wartości dla K=100 jest zgodny z rozkładem normalnym.
+
+## K = 200
+
+Przeprowadźmy te badania dla 200 danych.
+
+```{r}
+all_dane_200_1 <- dane_los(200, 1)
+srednie_dane_200_1 <- sapply(all_dane_200_1, mean)
+
+statystyki_200_1 <- statystyki(srednie_dane_200_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_200_1)
+```
+
+```{r}
+histogram(srednie_dane_200_1)
+```
+
+Symulacja ilustruje dalsze zmniejszenie zróżnicowania oraz uzyskanie bardziej symetrycznego i stabilnego kształtu rozkładu średnich wartości w porównaniu do poprzednich symulacji z mniejszą liczbą danych. Wykres pudełkowy prezentuje medianę równą 1, co jest zgodne z wartością oczekiwaną. Histogram również ukazuje bardziej symetryczny kształt, nawet jeśli istnieje subtelne obniżenie po lewej stronie, co może wynikać z naturalnych fluktuacji w próbie (widzimy wartości odstające na wykresie pudełkowym).
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_200_1)
+```
+
+P-value jest znacznie wyższa niż tradycyjny poziom istotności 0.05, co sugeruje, że brak jest statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Możemy więc przyjąć, że na podstawie tego testu, rozkład średnich wartości dla K=200 jest zgodny z rozkładem normalnym.
+
+## K = 500
+
+Przeprowadźmy te badania dla 500 danych.
+
+```{r}
+all_dane_500_1 <- dane_los(500, 1)
+srednie_dane_500_1 <- sapply(all_dane_500_1, mean)
+
+statystyki_500_1 <- statystyki(srednie_dane_500_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_500_1)
+```
+
+```{r}
+histogram(srednie_dane_500_1)
+```
+
+Wykres pudełkowy nie wykazuje żadnych wartości odstających, co świadczy o mniejszej zmienności i bardziej skoncentrowanym rozkładzie. Histogram ukazuje gładszy i bardziej symetryczny kształt, sugerując, że zwiększenie liczby danych przyczynia się do jeszcze bardziej precyzyjnej estymacji średniej i lepszego przybliżenia do rozkładu normalnego.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_500_1)
+```
+
+P-value jest znacznie wyższa niż tradycyjny poziom istotności 0.05, co sugeruje brak statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Na podstawie tego testu można przyjąć, że rozkład średnich wartości dla K=500 jest zgodny z rozkładem normalnym.
+
+## K = 1000
+
+Przeprowadźmy jeszcze tę symulację dla K = 1000.
+
+```{r}
+all_dane_1000_1 <- dane_los(1000, 1)
+srednie_dane_1000_1 <- sapply(all_dane_1000_1, mean)
+
+statystyki_1000_1 <- statystyki(srednie_dane_1000_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_1000_1)
+```
+
+```{r}
+histogram(srednie_dane_1000_1)
+```
+
+Symulacja dla rozkładu Poissona z parametrem lambda równym 1 i k równym 1000, przedstawiona na wykresie pudełkowym i histogramie, ukazuje dalsze zmniejszenie zróżnicowania, jednak widoczne są wartości odstające na wykresie pudełkowym oraz lekka prawostronna skośność histogramu.
+Wartości odstające na wykresie pudełkowym mogą być wynikiem skrajnych obserwacji w danej próbie, które wpływają na miary rozproszenia, takie jak kwartyle czy zakres.
+
+Przeprowadźmy jeszcze test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_1000_1)
+```
+
+P-value jest znacznie wyższa niż tradycyjny poziom istotności 0.05, co sugeruje brak statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Na podstawie tego testu można przyjąć, że rozkład średnich wartości dla K=1000 jest zgodny z rozkładem normalnym.
+
+## Zestawienie wyników
+
+Zobaczmy jeszcze raz jak wyglądają statystyki opisowe w zależności od liczby danych.
+
+```{r}
+zestawienie_1 <- t(data.frame(statystyki_5_1, statystyki_10_1, statystyki_20_1,
+                              statystyki_30_1, statystyki_50_1, statystyki_100_1,
+                              statystyki_200_1, statystyki_500_1, statystyki_1000_1))
+rownames(zestawienie_1) <- c("K = 5", "K = 10", "K = 20", "K = 30", 
+                             "K = 50", "K = 100", "K = 200", "K = 500", "K = 1000")
+zestawienie_1
+```
+
+Porównajmy też wygląd wykresów pudełkowych.
+
+```{r}
+boxplot(srednie_dane_5_1, srednie_dane_10_1, srednie_dane_20_1,
+        srednie_dane_30_1, srednie_dane_50_1, srednie_dane_100_1,
+        srednie_dane_200_1, srednie_dane_500_1, srednie_dane_1000_1,
+        col = 'lightblue',
+        border = 'darkblue',
+        names = c("5", "10", "20", "30", "50", "100", "200", "500", "1000"),
+        main = "Wykresy pudełkowe w zależności od ilości danych K")
+```
+
+## Wnioski
+
+Analizując powyższe rozkłady dla różnych wartości K (liczba danych wykorzystanych do obliczenia średniej) można zauważyć, że dla większych wartości K (50, 100, 200, 500, 1000), rozkład średnich wartości jest bardziej zbliżony do rozkładu normalnego, co jest widoczne w niższych wartościach odchylenia standardowego, współczynnika skośności i kurtozy. Wzrost liczby danych prowadzi do bardziej stabilnych i symetrycznych estymacji średniej, zmniejszając jednocześnie wpływ wartości odstających i nieregularności w danych.
+ 
+# Symulacja wyników dla rozkładu Poissona z parametrem lambda = 40
+
+```{r, echo=FALSE}
+pudelkowy <- function(srednie) {
+  pudelkowy <- ggplot() +
+    geom_boxplot(aes(x = srednie),
+                 color = "darkgreen") +
+    coord_flip() +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Wykres pudełkowy",
+         x = "Wartości")
+  return(pudelkowy)
+}
+
+histogram <- function(srednie) {
+  histogram <- ggplot() +
+    geom_histogram(aes(x = srednie),
+                   bins = 10,
+                   color = "darkgreen",
+                   fill = "lightgreen") +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Histogram",
+         x = "Wartości",
+         y = "Liczba wystąpień")
+  return(histogram)
+}
+```
+
+## K = 5
+
+Rozpoczynamy od wygenerowania listy 300 elementów, gdzie każdy element zawiera 5 losowych wartości z rozkładu Poissona o parametrze lambda równym 40. Następnie tworzymy wektor średnich z każdego elementu i na ich podstawie obliczamy statystyki opisowe (średnią, odchylenie standardowe, współczynnik skośności, kurtozę).
+
+```{r}
+all_dane_5_40 <- dane_los(5, 40)
+srednie_dane_5_40 <- sapply(all_dane_5_40, mean)
+
+statystyki_5_40 <- statystyki(srednie_dane_5_40)
+```
+
+Tworzymy wykres pudełkowy i histogram dla średnich wartości.
+
+```{r}
+pudelkowy(srednie_dane_5_40)
+```
+
+```{r}
+histogram(srednie_dane_5_40)
+```
+
+Możemy zaobserwować, że średnie wartości są skupione wokół wartości oczekiwanej, choć ich mediana zauważalnie odbiega od niej. Dodatkowo, w porównaniu z rozkładem Poissona dla lambdy równej 1 z wcześniejszych rozważań, można zauważyć, że asymetria jest zdecydowanie mniej zauważalna, co wpływa na kształt wykresu pudełkowego oraz histogramu.  
+
+Przejdźmy do sprawdzenia czy średnie mają rozkład normalny. W tym celu skorzystamy z testu Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_5_40)
+```
+
+Na podstawie testu Shapiro-Wilka, nie ma wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu na poziomie istotności 0,05. Pozwala nam to zakładać, że analizowany rozkład nie różni się istotnie od rozkładu normalnego na wcześniej założonym poziomie istnotności. 
+
+## K = 10
+
+Tutaj postępujemy podobnie jak w powyższym przypadku, jedyną różnicą jest wzrost liczby danych wykorzystanych do obliczenia średniej z 5 na 10.
+
+```{r}
+all_dane_10_40 <- dane_los(10, 40)
+srednie_dane_10_40 <- sapply(all_dane_10_40, mean)
+
+statystyki_10_40 <- statystyki(srednie_dane_10_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_10_40)
+```
+
+```{r}
+histogram(srednie_dane_10_40)
+```
+
+Tak samo jak w przypadku K = 5, średnie wartości dla K = 10 są skupione wokół wartości oczekiwanej, chociaż ich mediana jest bliższa 40. Szerokość pudełka również się zmniejszyła w porównaniu z wykresami dla K = 5.
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_10_40)
+```
+
+Podobnie jak w poprzednim przypadku, brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 20
+
+Przeprowadźmy te badania dla 20 danych wykorzystanych do obliczenia średniej.
+
+```{r}
+all_dane_20_40 <- dane_los(20, 40)
+srednie_dane_20_40 <- sapply(all_dane_20_40, mean)
+
+statystyki_20_40 <- statystyki(srednie_dane_20_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_20_40)
+```
+
+```{r}
+histogram(srednie_dane_20_40)
+```
+
+Wykres pudełkowy i histogram dla K = 20 ukazują, że zwiększona liczba danych skutkuje mniejszym zróżnicowaniem i szerszym zakresem wartości średnich, co sugeruje, że większa próba bardziej wiarygodnie odzwierciedla centralne tendencje tego rozkładu. Wraz ze wzrostem K obserwujemy również bardziej wyraźny kształt rozkładu, przypominjący ten symetryczny.  
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_20_40)
+```
+
+Podobnie jak w poprzednim przypadku, brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 30
+
+Przeprowadźmy te badania dla 30 danych.
+
+```{r}
+all_dane_30_40 <- dane_los(30, 40)
+srednie_dane_30_40 <- sapply(all_dane_30_40, mean)
+
+statystyki_30_40 <- statystyki(srednie_dane_30_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_30_40)
+```
+
+```{r}
+histogram(srednie_dane_30_40)
+```
+
+Histogram nie wydaje się być bardziej symetryczny, ani “gładszy”, w porównaniu z poprzednim wykresem dla 
+K = 20. Może być to spowodowane wartościami odstającymi. Szerokość pudełka  uległa zmniejszeniu w niewielkim stopniu. Niewielkie oddalenie mediany od wartości oczekiwanej może być spowodowane asymetrią rozkładu danych lub obecnością wartości odstających.
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_30_40)
+```
+
+Podobnie jak w poprzednim przypadku, wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 50
+
+Przeprowadźmy te badania dla 50 danych.
+
+```{r}
+all_dane_50_40 <- dane_los(50, 40)
+srednie_dane_50_40 <- sapply(all_dane_50_40, mean)
+
+statystyki_50_40 <- statystyki(srednie_dane_50_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_50_40)
+```
+
+```{r}
+histogram(srednie_dane_50_40)
+```
+
+Symulacja dla rozkładu Poissona z parametrem lambda = 40 i K = 50, gdzie N = 300, przedstawiona na wykresie pudełkowym i histogramie, wskazuje na zmniejszenie zróżnicowania średnich wartości. Ponadto, zarówno kwartyl dolny, jak i kwartyl górny zbliżyły się do wartości oczekiwanej, a wąsy uległy zmiejszeniu. Liczba wartości odstających również uległa zmniejszeniu.
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka. 
+
+```{r}
+shapiro.test(srednie_dane_50_40)
+```
+
+Podobnie jak w poprzednich przypadkach, wartość p-value znacząco przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 100
+
+Przeprowadźmy te badania dla 100 danych.
+
+```{r}
+all_dane_100_40 <- dane_los(100, 40)
+srednie_dane_100_40 <- sapply(all_dane_100_40, mean)
+
+statystyki_100_40 <- statystyki(srednie_dane_100_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_100_40)
+```
+
+```{r}
+histogram(srednie_dane_100_40)
+```
+
+Symulacja dla rozkładu Poissona z parametrem lambda = 40 i K = 100, przedstawiona na wykresie pudełkowym i histogramie, ukazuje dalsze zmniejszenie zróżnicowania oraz bardziej symetryczny kształt rozkładu średnich wartości w porównaniu do poprzednich symulacji z mniejszą liczbą danych. Wykres pudełkowy nadal wykazuje lekkie odchylenie mediany od wartości oczekiwanej, co może być wynikiem asymetrii rozkładu danych. Pomimo tego, zarówno histogram, jak i wykres pudełkowy wskazują na bardziej stabilną estymację średniej wraz ze wzrostem liczby danych.
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka. 
+
+```{r}
+shapiro.test(srednie_dane_100_40)
+```
+
+Podobnie jak w poprzednich przypadkach, wartość p-value znacząco przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 200
+
+Przeprowadźmy te badania dla 200 danych.
+
+```{r}
+all_dane_200_40 <- dane_los(200, 40)
+srednie_dane_200_40 <- sapply(all_dane_200_40, mean)
+
+statystyki_200_40 <- statystyki(srednie_dane_200_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_200_40)
+```
+
+```{r}
+histogram(srednie_dane_200_40)
+```
+
+Zwiększenie liczby danych spowodowało zmiany zarówno na histogramie jak i na wykresie pudełkowym, między innymi mniejszyło się zróżnicowanie średnich wartości. Ponadto szerokość pudełka jak i długość jego wąsów uległy zmniejszeniu.  
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka. 
+
+```{r}
+shapiro.test(srednie_dane_200_40)
+```
+
+P-value jest znacznie wyższa niż poziom istotności co sugeruje, że brak jest statystycznie istotnych dowodów na odrzucenie hipotezy zerowej o normalności rozkładu. Możemy więc przyjąć, że na podstawie tego testu, rozkład średnich wartości dla K=200 jest zgodny z rozkładem normalnym.
+
+## K = 500
+
+Przeprowadźmy te badania dla 500 danych.
+
+```{r}
+all_dane_500_40 <- dane_los(500, 40)
+srednie_dane_500_40 <- sapply(all_dane_500_40, mean)
+
+statystyki_500_40 <- statystyki(srednie_dane_500_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_500_40)
+```
+
+```{r}
+histogram(srednie_dane_500_40)
+```
+
+Odległość kwartyla górnego i dolnego znacząco zmalała, co jest wynikiem wzrostu liczby danych. Mediana również zbliżyła się do wartości oczekiwanej. Histogram wskazuje na to, że zróżnicowanie średnich wartości zmalało. 
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka. 
+
+```{r}
+shapiro.test(srednie_dane_500_40)
+```
+
+Podobnie jak w poprzednich przypadkach, wartość p-value znacząco przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 1000
+
+Przeprowadźmy te badania dla 1000 danych.
+
+```{r}
+all_dane_1000_40 <- dane_los(1000, 40)
+srednie_dane_1000_40 <- sapply(all_dane_1000_40, mean)
+
+statystyki_1000_40 <- statystyki(srednie_dane_1000_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_1000_40)
+```
+
+```{r}
+histogram(srednie_dane_1000_40)
+```
+
+Zwiększenie parametru K sprawiło jeszcze większe zawężenie średnich wartości. Wykres pudełkowy przedstawia bardziej skrócone pudełko i zbliżone do siebie linie wąsów, co świadczy o jeszcze mniejszym zakresie rozkładu. 
+
+Sprawdźmy, czy zmienił się wynik testu normalności Shapiro-Wilka. 
+
+```{r}
+shapiro.test(srednie_dane_1000_40)
+```
+
+Podobnie jak w poprzednich przypadkach, wartość p-value znacząco przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## Zestawienie wyników
+
+Możemy teraz zestawić statystyki opisowe w zależności od liczby K. 
+
+```{r}
+zestawienie_40 <- t(data.frame(statystyki_5_40, statystyki_10_40, statystyki_20_40,
+                               statystyki_30_40, statystyki_50_40, statystyki_100_40,
+                               statystyki_200_40, statystyki_500_40, statystyki_1000_40))
+rownames(zestawienie_40) <- c("K = 5", "K = 10", "K = 20", "K = 30", 
+                             "K = 50", "K = 100", "K = 200", "K = 500", "K = 1000")
+zestawienie_40
+```
+
+Porównajmy też wygląd wykresów pudełkowych.
+
+```{r}
+boxplot(srednie_dane_5_40, srednie_dane_10_40, srednie_dane_20_40,
+        srednie_dane_30_40, srednie_dane_50_40, srednie_dane_100_40,
+        srednie_dane_200_40, srednie_dane_500_40, srednie_dane_1000_40,
+        col = 'lightgreen',
+        border = 'darkgreen',
+        names = c("5", "10", "20", "30", "50", "100", "200", "500", "1000"),
+        main = "Wykresy pudełkowe w zależności od ilości danych K")
+```
+
+## Wnioski
+
+Zestawiając powyższe rozkłady, łatwo zauważyć, że wraz ze zwiększaniem parametru K, rozkład średnich wartości jest bardziej zbliżony do rozkładu normalnego. Chociaż średnia wartość niezależnie od liczby danych oscyluje wokół 40, czasami przyjmując wartości mniejsze, a czasami większe, odchylenie od tej średniej sukcesywnie maleje wraz ze wzrostem K. 
+
+# Symulacja wyników dla rozkładu Poissona z parametrem lambda = 1 podniesionego do kwadratu
+
+```{r}
+pudelkowy <- function(srednie) {
+  pudelkowy <- ggplot() +
+    geom_boxplot(aes(x = srednie),
+                 color = "lightgoldenrod4") +
+    coord_flip() +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Wykres pudełkowy",
+         x = "Wartości")
+  return(pudelkowy)
+}
+
+histogram <- function(srednie) {
+  histogram <- ggplot() +
+    geom_histogram(aes(x = srednie),
+                   bins = 10,
+                   color = "lightgoldenrod4",
+                   fill = "lightgoldenrod") +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Histogram",
+         x = "Wartości",
+         y = "Liczba wystąpień")
+  return(histogram)
+}
+```
+
+## K = 5
+
+Najpierw stwórzmy listę 300 elementów, z których każdy zawiera 5 losowych wartości z rozkładu Poissona z lambda równym 1, podniesionych do kwadratu. Na tej podstawie obliczono wektor średnich, składający się z 300 wartości, gdzie każda z nich reprezentuje średnią z 5 danych. Następnie obliczamy statystyki opisowe.
+
+```{r}
+all_dane_kw5_1 <- dane_los_kwadrat(5, 1)
+srednie_dane_kw5_1 <- sapply(all_dane_kw5_1, mean)
+
+statystyki_kw5_1 <- statystyki(srednie_dane_kw5_1)
+```
+
+Tworzymy wykres pudełkowy i histogram dla średnich wartości z wygenerowanych 300 wektorów danych.
+
+```{r}
+pudelkowy(srednie_dane_kw5_1)
+```
+
+```{r}
+histogram(srednie_dane_kw5_1)
+```
+
+Na powyższym histogramie możemy zauważyć tzw. "piki", co sugeruje, że przy niewielkiej próbie pewne wartości pojawiają się znacznie częściej niż pozostałe. Wykres pudełkowy wskazuje na obecność dużej liczby wartości odstających.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw5_1)
+```
+
+W tym przypadku niska wartość p-value oznacza odrzucenie hipotezy zerowej, czyli hipotezy o normalności rozkładu danych. Można więc stwierdzić, że dane nie pochodzą z rozkładu normalnego.
+
+## K = 10
+
+```{r}
+all_dane_kw10_1 <- dane_los_kwadrat(10, 1)
+srednie_dane_kw10_1 <- sapply(all_dane_kw10_1, mean)
+
+statystyki_kw10_1 <- statystyki(srednie_dane_kw10_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw10_1)
+```
+
+```{r}
+histogram(srednie_dane_kw10_1)
+```
+
+Zarówno histogram jak i wykres pudełkowy nie różnią się znacząco od tych dla mniejszej ilości danych. Możemy zauważyć mniejszą liczbę wartości odstających oraz, że wykres pudełkowy jest krótszy co oznacza malejącą zmienność danych oraz zwiększającą się precyzję estymacji średniej w miarę wzrostu liczby danych.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw10_1)
+```
+
+Ponownie niska wartość p-value oznacza odrzucenie hipotezy zerowej, czyli hipotezy o normalności rozkładu danych. Można więc stwierdzić, że dane nie pochodzą z rozkładu normalnego.
+
+## K = 20
+
+```{r}
+all_dane_kw20_1 <- dane_los_kwadrat(20, 1)
+srednie_dane_kw20_1 <- sapply(all_dane_kw20_1, mean)
+
+statystyki_kw20_1 <- statystyki(srednie_dane_kw20_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw20_1)
+```
+
+```{r}
+histogram(srednie_dane_kw20_1)
+```
+
+Ponownie, możemy zauważyć delikatne wygładzenie rozkładu oraz skrócenie się wykresu pudełkowego. Widzimy również, że środek pudełka znajduje się blisko mediany, co sugeruje symetryczny rozkład.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw20_1)
+```
+
+Tak jak w poprzednich przypadkach, niska wartość p-value oznacza odrzucenie hipotezy zerowej, czyli hipotezy o normalności rozkładu danych. Można więc stwierdzić, że dane nie pochodzą z rozkładu normalnego.
+
+## K = 30
+
+```{r}
+all_dane_kw30_1 <- dane_los_kwadrat(30, 1)
+srednie_dane_kw30_1 <- sapply(all_dane_kw30_1, mean)
+
+statystyki_kw30_1 <- statystyki(srednie_dane_kw30_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw30_1)
+```
+
+```{r}
+histogram(srednie_dane_kw30_1)
+```
+
+Widzimy dalsze zmniejszenie wpływu wartości odstających i nieregularności w danych, co potwierdza lepszą stabilność estymacji średniej.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw30_1)
+```
+
+Ponownie, niska wartość p-value oznacza odrzucenie hipotezy zerowej, czyli hipotezy o normalności rozkładu danych. Można więc stwierdzić, że dane nie pochodzą z rozkładu normalnego.
+
+## K = 50
+
+```{r}
+all_dane_kw50_1 <- dane_los_kwadrat(50, 1)
+srednie_dane_kw50_1 <- sapply(all_dane_kw50_1, mean)
+
+statystyki_kw50_1 <- statystyki(srednie_dane_kw50_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw50_1)
+```
+
+```{r}
+histogram(srednie_dane_kw50_1)
+```
+
+Możemy zauważyć "wygładzanie" się skośności rozkładu. Wskazuje to na precyzyjniejszą estymację rozkładu, a dane są bardziej skoncentrowane.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw50_1)
+```
+
+Tutaj również odrzucamy hipotezę zerową, mówiącą o normalności rozkładu danych. 
+
+## K = 100
+
+```{r}
+all_dane_kw100_1 <- dane_los_kwadrat(100, 1)
+srednie_dane_kw100_1 <- sapply(all_dane_kw100_1, mean)
+
+statystyki_kw100_1 <- statystyki(srednie_dane_kw100_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw100_1)
+```
+
+```{r}
+histogram(srednie_dane_kw100_1)
+```
+
+Widzimy dalszy wpływ (jak w poprzednich przypadkach) coraz większej liczby danych w naszym rozkładzie.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw100_1)
+```
+
+W tym przypadku wartość p-value jest większa niż poziom istotności 0.05, co oznacza, że nie ma podstaw do odrzucenia hipotezy zerowej o normalności rozkładu danych. Można więc stwierdzić, że dane wykazują pewne cechy zgodności z rozkładem normalnym.
+
+## K = 200
+
+```{r}
+all_dane_kw200_1 <- dane_los_kwadrat(200, 1)
+srednie_dane_kw200_1 <- sapply(all_dane_kw200_1, mean)
+
+statystyki_kw200_1 <- statystyki(srednie_dane_kw200_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw200_1)
+```
+
+```{r}
+histogram(srednie_dane_kw200_1)
+```
+
+Możemy zauważyć dalsze "wygładzanie" się skośności rozkładu. Wskazuje to na coraz precyzyjniejszą estymację rozkładu. Wykres pudełkowy ponownie ukazuje skrócenie się pudełka, co świadczy o mniejszym zróżnicowaniu wartości średnich. Linie wąsów są bardziej zbliżone do siebie, co sugeruje mniejszy zakres rozkładu.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw200_1)
+```
+
+W tym przypadku wartość p-value jest również większa niż poziom istotności 0.05, co oznacza, że nie ma podstaw do odrzucenia hipotezy zerowej o normalności rozkładu danych. Można więc stwierdzić, że dane wykazują pewne cechy zgodności z rozkładem normalnym.
+
+## K = 500
+
+```{r}
+all_dane_kw500_1 <- dane_los_kwadrat(500, 1)
+srednie_dane_kw500_1 <- sapply(all_dane_kw500_1, mean)
+
+statystyki_kw500_1 <- statystyki(srednie_dane_kw500_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw500_1)
+```
+
+```{r}
+histogram(srednie_dane_kw500_1)
+```
+
+Wykres pudełkowy wykazuje mniej wartości odstających, co świadczy o mniejszej zmienności i bardziej skoncentrowanym rozkładzie. Histogram ukazuje głądszy i bardziej symetryczny kształt, sugerując, że zwiększenie liczby danych przyczynia się do jeszcze bardziej precyzyjnej estymacji średniej i lepszego przybliżenia do rozkładu normalnego.
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw500_1)
+```
+
+Na podstawie testu można stwierdzić, że dane wykazują cechy zgodności z rozkładem normalnym.
+
+## K = 1000
+
+```{r}
+all_dane_kw1000_1 <- dane_los_kwadrat(1000, 1)
+srednie_dane_kw1000_1 <- sapply(all_dane_kw1000_1, mean)
+
+statystyki_kw1000_1 <- statystyki(srednie_dane_kw1000_1)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw1000_1)
+```
+
+```{r}
+histogram(srednie_dane_kw1000_1)
+```
+
+Histogram ma gładki, symetryczny kształt, co świadczy o tym, że rozkład danych jest bardziej normalny. WYkres pudełkowy ukazuje jeszcze krótsze "pudełko" o oznacza mniejszą zmienność danych. 
+
+Przeprowadźmy test Shapiro-Wilka dla tych danych.
+
+```{r}
+shapiro.test(srednie_dane_kw1000_1)
+```
+
+Na podstawie testu można stwierdzić, że dane wykazują cechy zgodności z rozkładem normalnym.
+
+## Zestawienie wyników
+
+Możemy teraz zestawić statystyki opisowe w zależności od liczby K.
+
+```{r}
+zestawienie_kw1 <- t(data.frame(statystyki_kw5_1, statystyki_kw10_1, statystyki_kw20_1,
+                                statystyki_kw30_1, statystyki_kw50_1, statystyki_kw100_1,
+                                statystyki_kw200_1, statystyki_kw500_1, statystyki_kw1000_1))
+rownames(zestawienie_kw1) <- c("K = 5", "K = 10", "K = 20", "K = 30", 
+                             "K = 50", "K = 100", "K = 200", "K = 500", "K = 1000")
+zestawienie_kw1
+```
+
+Porównajmy też wygląd wykresów pudełkowych.
+
+```{r}
+boxplot(srednie_dane_kw5_1, srednie_dane_kw10_1, srednie_dane_kw20_1,
+        srednie_dane_kw30_1,srednie_dane_kw50_1, srednie_dane_kw100_1,
+        srednie_dane_kw200_1, srednie_dane_kw500_1, srednie_dane_kw1000_1,
+        col = 'lightgoldenrod',
+        border = 'lightgoldenrod4',
+        names = c("5", "10", "20", "30", "50", "100", "200", "500", "1000"),
+        main = "Wykresy pudełkowe w zależności od ilości danych K")
+```
+
+## Wnioski
+
+W miarę wzrostu wartości K, rozkład coraz bardziej zbliża się do rozkładu normalnego, co potwierdzają niższe wartości skośności i kurtozy. Mniejsze wartości odchylenia standardowego wskazują na mniejszą zmienność danych. Podnoszenie wartości do kwadratu wpływa natomiast na symetryzację rozkładu i zmniejszenie wpływu obserwacji odstających. Wykresy pudełkowe przedstawiające rozkłady średnich dla różnych wartości K wskazują na ewolucję kształtu rozkładu wraz ze wzrostem liczby danych. Dla mniejszej liczby danych, obserwujemy znaczne zmienności, obecność wartości odstających i asymetrię. W miarę zwiększania K, wykresy pudełkowe stają się coraz bardziej zbliżone do rozkładu normalnego.
+
+# Symulacja wyników dla rozkładu Poissona z parametrem lambda = 40 podniesionego do kwadratu
+
+```{r, echo = FALSE}
+pudelkowy <- function(srednie) {
+  pudelkowy <- ggplot() +
+    geom_boxplot(aes(x = srednie),
+                 color = "indianred4") +
+    coord_flip() +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Wykres pudełkowy",
+         x = "Wartości")
+  return(pudelkowy)
+}
+
+histogram <- function(srednie) {
+  histogram <- ggplot() +
+    geom_histogram(aes(x = srednie),
+                   bins = 10,
+                   color = "indianred4",
+                   fill = "indianred") +
+    theme_light() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    labs(title = "Histogram",
+         x = "Wartości",
+         y = "Liczba wystąpień")
+  return(histogram)
+}
+```
+
+## K = 5
+
+Najpierw stwórzmy listę 300 elementów, z których każdy zawiera 5 losowych wartości z rozkładu Poissona z lambda równym 40, podniesionych do kwadratu. Na tej podstawie obliczono wektor średnich, składający się z 300 wartości, gdzie każda z nich reprezentuje średnią z 5 danych. Następnie obliczamy statystyki opisowe.
+
+```{r}
+all_dane_kw5_40 <- dane_los_kwadrat(5, 40)
+srednie_dane_kw5_40 <- sapply(all_dane_kw5_40, mean)
+
+statystyki_kw5_40 <- statystyki(srednie_dane_kw5_40)
+```
+
+Tworzymy wykres pudełkowy i histogram dla średnich wartości z wygenerowanych 300 wektorów danych.
+
+```{r}
+pudelkowy(srednie_dane_kw5_40)
+```
+
+```{r}
+histogram(srednie_dane_kw5_40)
+```
+
+Powyższy histogram wskazuje na dość duży rozstrzał średnich wartości. Szerokość pudełka jak i wąsów jest również niemała. 
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw5_40)
+```
+
+Na podstawie testu Shapiro-Wilka, nie ma wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu na poziomie istotności 0,05. Pozwala nam to zakładać, że analizowany rozkład nie różni się istotnie od rozkładu normalnego na wcześniej założonym poziomie istnotności.
+
+## K = 10
+
+Tutaj postępujemy podobnie jak w powyższym przypadku, jedyną różnicą jest wzrost liczby danych wykorzystanych do obliczenia średniej z 5 na 10.
+
+```{r}
+all_dane_kw10_40 <- dane_los_kwadrat(10, 40)
+srednie_dane_kw10_40 <- sapply(all_dane_kw10_40, mean)
+
+statystyki_kw10_40 <- statystyki(srednie_dane_kw10_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw10_40)
+```
+
+```{r}
+histogram(srednie_dane_kw10_40)
+```
+
+Zarówno histogram jak i wykres pudełkowy nie różnią się znacząco od tych dla mniejszej ilości danych. Doszło do niewielkiego spadku w roztrzale danych. Możemy także zauważyć, że wykres pudełkowy jest krótszy co oznacza malejącą zmienność danych oraz zwiększającą się precyzję estymacji średniej w miarę wzrostu liczby danych.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw10_40)
+```
+
+Podobnie jak w poprzednim przypadku, brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 20
+
+Przeprowadźmy te badania dla 20 danych wykorzystanych do obliczenia średniej.
+
+```{r}
+all_dane_kw20_40 <- dane_los_kwadrat(20, 40)
+srednie_dane_kw20_40 <- sapply(all_dane_kw20_40, mean)
+
+statystyki_kw20_40 <- statystyki(srednie_dane_kw20_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw20_40)
+```
+
+```{r}
+histogram(srednie_dane_kw20_40)
+```
+
+Na wykresach możemy zauważyć spadek wartości mediany względem poprzednich statystyk. Kwartyl dolny i górny zbliżyły się do siebie, tak samo jak wartości maksymalne i minimalne. 
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw20_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 30
+
+Przeprowadźmy te badania dla 30 danych.
+
+```{r}
+all_dane_kw30_40 <- dane_los_kwadrat(30, 40)
+srednie_dane_kw30_40 <- sapply(all_dane_kw30_40, mean)
+
+statystyki_kw30_40 <- statystyki(srednie_dane_kw30_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw30_40)
+```
+
+```{r}
+histogram(srednie_dane_kw30_40)
+```
+
+Ponownie,możemy zaobserowować skrócenie się wykresu pudełkowego. Widzimy również, że środek pudełka znajduje się blisko mediany, co sugeruje symetryczny rozkład.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw30_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 50
+
+Przeprowadźmy te badania dla 50 danych.
+
+```{r}
+all_dane_kw50_40 <- dane_los_kwadrat(50, 40)
+srednie_dane_kw50_40 <- sapply(all_dane_kw50_40, mean)
+
+statystyki_kw50_40 <- statystyki(srednie_dane_kw50_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw50_40)
+```
+
+```{r}
+histogram(srednie_dane_kw50_40)
+```
+
+Wykres pudełkowy i histogram dla K = 50 ukazują, że zwiększona liczba danych skutkuje mniejszym zróżnicowaniem i szerszym zakresem wartości średnich, co sugeruje, że większa próba bardziej wiarygodnie odzwierciedla centralne tendencje tego rozkładu. Wraz ze wzrostem K obserwujemy również bardziej wyraźny kształt rozkładu, przypominjący ten symetryczny.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw50_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 100
+
+Przeprowadźmy te badania dla 100 danych.
+
+```{r}
+all_dane_kw100_40 <- dane_los_kwadrat(100, 40)
+srednie_dane_kw100_40 <- sapply(all_dane_kw100_40, mean)
+
+statystyki_kw100_40 <- statystyki(srednie_dane_kw100_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw100_40)
+```
+
+```{r}
+histogram(srednie_dane_kw100_40)
+```
+
+Zwiększenie liczby danych spowodowało zmiany zarówno na histogramie jak i na wykresie pudełkowym, między innymi zmniejszyło się zróżnicowanie średnich wartości. Ponadto szerokość pudełka jak i długość jego wąsów uległy zmniejszeniu.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw100_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 200
+
+Przeprowadźmy te badania dla 200 danych.
+
+```{r}
+all_dane_kw200_40 <- dane_los_kwadrat(200, 40)
+srednie_dane_kw200_40 <- sapply(all_dane_kw200_40, mean)
+
+statystyki_kw200_40 <- statystyki(srednie_dane_kw200_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw200_40)
+```
+
+```{r}
+histogram(srednie_dane_kw200_40)
+```
+
+Odległość kwartyla górnego i dolnego znacząco zmalała, co jest wynikiem wzrostu liczby danych. Wykres pudełkowy wykazuje mniej wartości odstających, co świadczy o mniejszej zmienności i bardziej skoncentrowanym rozkładzie. Histogram wskazuje na to, że zróżnicowanie średnich wartości zmalało. 
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw200_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 500
+
+Przeprowadźmy te badania dla 500 danych.
+
+```{r}
+all_dane_kw500_40 <- dane_los_kwadrat(500, 40)
+srednie_dane_kw500_40 <- sapply(all_dane_kw500_40, mean)
+
+statystyki_kw500_40 <- statystyki(srednie_dane_kw500_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw500_40)
+```
+
+```{r}
+histogram(srednie_dane_kw500_40)
+```
+
+Widzimy dalszy wpływ (jak w poprzednich przypadkach) coraz większej liczby danych w naszym rozkładzie.
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw500_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## K = 1000
+
+Przeprowadźmy te badania dla 1000 danych.
+
+```{r}
+all_dane_kw1000_40 <- dane_los_kwadrat(1000, 40)
+srednie_dane_kw1000_40 <- sapply(all_dane_kw1000_40, mean)
+
+statystyki_kw1000_40 <- statystyki(srednie_dane_kw1000_40)
+```
+
+```{r}
+pudelkowy(srednie_dane_kw1000_40)
+```
+
+```{r}
+histogram(srednie_dane_kw1000_40)
+```
+
+Histogram ukazuje głądszy i bardziej symetryczny kształt, sugerując, że zwiększenie liczby danych przyczynia się do jeszcze bardziej precyzyjnej estymacji średniej i lepszego przybliżenia do rozkładu normalnego. Jest mało wartości odstających, a sama szerokość pudełka zdecydowanie uległa zmniejszeniu. 
+
+Przeprowadźmy test Shapiro-Wilka.
+
+```{r}
+shapiro.test(srednie_dane_kw1000_40)
+```
+
+Wartość p-value zdecydowanie przekracza poziom istotności, stąd brak wystarczających dowodów, aby odrzucić hipotezę zerową o normalności analizowanego rozkładu. Istnieją podstawy aby stwierdzić, że analizowany rozkład nie różni się istotnie od rozkładu normalnego.
+
+## Zestawienie wyników
+
+Możemy teraz zestawić statystyki opisowe w zależności od liczby K.
+
+```{r}
+zestawienie_kw40 <- t(data.frame(statystyki_kw5_40, statystyki_kw10_40, statystyki_kw20_40,
+                                 statystyki_kw30_40, statystyki_kw50_40, statystyki_kw100_40,
+                                 statystyki_kw200_40, statystyki_kw500_40, statystyki_kw1000_40))
+rownames(zestawienie_kw40) <- c("K = 5", "K = 10", "K = 20", "K = 30", 
+                               "K = 50", "K = 100", "K = 200", "K = 500", "K = 1000")
+zestawienie_kw40
+```
+
+Porównajmy też wygląd wykresów pudełkowych.
+
+```{r}
+boxplot(srednie_dane_kw5_40, srednie_dane_kw10_40, srednie_dane_kw20_40,
+        srednie_dane_kw30_40, srednie_dane_kw50_40, srednie_dane_kw100_40,
+        srednie_dane_kw200_40, srednie_dane_kw500_40, srednie_dane_kw1000_40,
+        col = 'indianred',
+        border = 'indianred4',
+        names = c("5", "10", "20", "30", "50", "100", "200", "500", "1000"),
+        main = "Wykresy pudełkowe w zależności od ilości danych K")
+```
+
+## Wnioski
+
+W miarę wzrostu wartości K, rozkład coraz bardziej zbliża się do rozkładu normalnego, co potwierdzają niższe wartości skośności i kurtozy. Mniejsze wartości odchylenia standardowego wskazują na mniejszą zmienność danych. Wzrost paramatru K prowadzi do bardziej stabilnych i symetrycznych estymacji średniej, zmniejszając jednocześnie wpływ wartości odstających i nieregularności w danych.
+
+# Podsumowanie przeprowadzonych symulacji
+
+Przeprowadzone przez nas symulacje ukazują, że zwiększając wartość parametru lambda, rozkład Poissona staje się bardziej symetryczny i bardziej zbliżony do rozkładu normalnego. Ponadto większa wartość parametru K skutkuje zmniejszeniem wpływu nieregularności na kształt rozkładów. Ogólnie można stwierdzić, że wzrost parametru K powoduje zwężenie przedziału wartości w których średnie występują. Kolejne spostrzeżenie, jakie można wyciągnąć z przeprowadzonej symulacji jest takie, że podniesienie wartości z rozkładu Poissona do kwadratu "rozciąga" rozkład w przypadku niskiej lambdy i skupia go wokół kwadratu lambdy w przypadku wysokiej wartości tego parametru.

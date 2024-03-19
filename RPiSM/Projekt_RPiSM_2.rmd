@@ -1,0 +1,269 @@
+---
+title: "Projekt RPiSM 2"
+author: "Natalia Kargól, Filip Regulski, Wiktor Kostera"
+date: "styczeń 2024"
+output: 
+  html_document:    
+    theme: bootstrap
+    toc: true
+    highlight: tango
+    toc_float: true
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+```{r, echo=FALSE, message=FALSE}
+library(readxl)
+library(dplyr)
+library(psych)
+library(ggplot2)
+```
+
+# Wprowadzenie
+
+Poniższa analiza wartości stóp zwrotu spółki JSW oraz analiza wariancji na przestrzeni lat 2022-2023 została przeprowadzona w oparciu o dane ze strony <https://stooq.pl/q/d/?s=jsw&c=0&d1=20211230&d2=20231231>. W tym celu pobrano plik `jsw.csv` z wartościami akcji za okres od 30.12.2021r. do 29.12.2023r. włącznie. Następnie przy użyciu narzędzi Excela dodano kolumnę `Dzień tygodnia` oraz obliczono stopy zwrotu zgodnie ze wzorem:
+
+$$Stopa = ln(x) - ln(x - 1)$$ Gdzie:
+
+-   x - wartość zamknięcia akcji w dniu x
+
+-   (x - 1) - wartość zamknięcia akcji w dniu (x - 1)
+
+Niepotrzebny wiersz z danymi dla 30.12.2021r. usunięto - był on potrzebny wyłącznie w celu policzenia stopy zwrotu dla dnia 3.01.2022r. Tak przygotowany plik `JSW.xlsx` wczytujemy do naszego programu:
+
+```{r}
+akcje <- read_excel("/Users/wiktorkostera/Desktop/RPiSM/JSW.xlsx")
+akcje
+```
+
+Ponadto na podstawie tego pliku tworzymy również próbkę składającą się z 1/3 danych, w celu zaobserwowania czy zależności zmieniają się istotnie w zależności od wielkości badanego zbioru.
+
+```{r}
+akcje_3 <- read_excel("/Users/wiktorkostera/Desktop/RPiSM/JSW_3.xlsx")
+akcje_3
+```
+
+```{r, echo = FALSE}
+akcje$Data <- as.Date(akcje$Data)
+akcje$`Dzień tygodnia` <- factor(akcje$`Dzień tygodnia`, levels = c("poniedziałek", "wtorek", "środa", "czwartek", "piątek"))
+```
+
+```{r, echo = FALSE}
+akcje_3$Data <- as.Date(akcje_3$Data)
+akcje_3$`Dzień tygodnia` <- factor(akcje_3$`Dzień tygodnia`, levels = c("poniedziałek", "wtorek", "środa", "czwartek", "piątek"))
+```
+
+# Analiza dla 1/3 próbki
+
+## Charakterystyki rozkładu dla każdego dnia tygodnia
+
+```{r}
+dni <- akcje_3 %>%
+  select(`Dzień tygodnia`, `Stopa zwrotu`) %>%
+  group_by(`Dzień tygodnia`) %>%
+  summarize(ŚREDNIA = mean(`Stopa zwrotu`),
+            ODCHYLENIE = sd(`Stopa zwrotu`),
+            SKOŚNOŚĆ = skew(`Stopa zwrotu`),
+            KURTOZA = kurtosi(`Stopa zwrotu`))
+dni
+```
+
+Wyżej przedstawione statystyki wskazują na fakt, że w zależności od dnia tygodnia średnie stopy zwrotu różnią się od siebie. Warto zwrócić uwagę na statystyki dla środy, gdzie nie tylko odchylenie jest największe, ale również skośność oraz kurtoza. W ten właśnie dzień mamy do czynienia z silną asymetrią prawostronną, a intensywność wartości skrajnych jest zdecydowanie większa od tych w rozkładzie normalnym.
+
+## Histogramy
+
+```{r}
+akcje_3 %>%
+  ggplot() +
+  geom_histogram(aes(x = `Stopa zwrotu`),
+                 color = "darkblue",
+                 fill = "skyblue",
+                 bins = 10) +
+  facet_wrap(~ `Dzień tygodnia`,
+             ncol = 3) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "skyblue"),
+        strip.text = element_text(color = "darkblue"),
+        panel.spacing = unit(1, "lines")) +
+  labs(title = "Wykres histogramu",
+       x = "Stopa zwrotu",
+       y = "Liczba dni")
+```
+
+Histogramy pokazują, że pomimo, że na każdym wykresie najwięcej wartości znajduje się w okolicach zera, to w zależności od konretnego dnia tygodnia stopa zwrotu może różnić się istotnie. Można zauważyć, że w przypadku środy prawy ogon jest bardziej wydłużony niż w reszcie analizowanych dni. Ponadto możemy zaobserwować, że w poniedziałek zdecydowanie najwięcej wartości oscyluje wokół zera. A w przypadku czwartku i piątku łatwo stwierdzić, że częstotliwość występowania wartości skrajnych jest najmniejsza.
+
+## Wykresy pudełkowe
+
+```{r}
+akcje_3 %>%
+  ggplot() +
+  geom_boxplot(aes(x = `Stopa zwrotu`, y = `Dzień tygodnia`),
+                 color = "darkblue") +
+  coord_flip() +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres pudełkowy",
+       x = "Stopa zwrotu")
+```
+
+Wykresy pudełkowe również potwierdzają powyższe stwierdzenia. W środę oraz czwartek jest najwięcej outlierów znajdujących się nad pudełkiem, które mogą wskazywać na fakt, że to właśnie w ten dzień zdarzają się najczęściej duże stopy zwrotu. Natomiast mediana stóp zwrotów oraz kwartyl górny wydają się przyjmować najwyższe wyniki we wtorki.
+
+## Analiza wariancji
+
+### ANOVA
+
+Teraz przejdziemy do analizy wariancji ANOVA, aby zbadać równość wartości oczekiwanych stóp zwrotu w poszczególnych dniach tygodnia.
+
+```{r}
+anova <- aov(akcje_3$`Stopa zwrotu` ~ akcje_3$`Dzień tygodnia`)
+summary(anova)
+```
+
+P-value jest większa niż poziom istotności 0.05, co oznacza, że nie ma podstaw do odrzucenia hipotezy zerowej. Hipoteza zerowa zakłada równość średnich stóp zwrotu między dniami tygodnia.
+
+Teraz przejdziemy do sprawdzenia założeń ANOVA do których należą:
+
+```         
+Test normalności 
+Test homogeniczności wariancji 
+```
+
+### Pochodzenie danych z rozkładu normalnego
+
+Z pomocą tutaj przychodzi funkcja tapply, dzięki której możemy zastosować test Shapiro-Wilka dla danych dotyczących stóp zwrotu w zależności od dnia tygodnia.
+
+```{r}
+tapply(akcje_3$`Stopa zwrotu`, akcje_3$`Dzień tygodnia`, shapiro.test)
+```
+
+Test normalności sugeruje, że dane tylko w przypadku środy nie pochodzą z rozkładu normalnego.
+
+### Homogeniczność wariancji
+
+Następnym założeniem ANOVA jest homogeniczność wariancji, którą w pakiecie R możemy sprawdzić korzystając z funkcji bartlett.test. W tym przypadku test ten został wykorzystany do oceny równości wariancji w stopach zwrotu w zależności od dnia tygodnia.
+
+```{r}
+bartlett.test(akcje_3$`Stopa zwrotu` ~ akcje_3$`Dzień tygodnia`)
+```
+
+Wynik ten nie dostarcza podstaw do odrzucenia hipotezy zerowej o homogeniczności wariancji. Oznacza to, że założenie o równości wariancji w poszczególnych dniach tygodnia jest spełnione.
+
+### Wnioski
+
+Na podstawie przeprowadzonej analizy ANOVA oraz weryfikacji założeń, nie ma statystycznie istotnych różnic w wartościach oczekiwanych stóp zwrotu dla danych pochodzących z dni: poniedziałek, wtorek, czwartek oraz piątek. Wyniki analizy ANOVA nie dostarczają podstaw do odrzucenia hipotezy zerowej, co sugeruje, że średnie stopy zwrotu dla wymienionych dni nie różnią się istotnie.
+
+# Analiza dla pełnej próbki
+
+## Charakterystyki rozkładu dla każdego dnia tygodnia
+
+```{r}
+dni <- akcje %>%
+  select(`Dzień tygodnia`, `Stopa zwrotu`) %>%
+  group_by(`Dzień tygodnia`) %>%
+  summarize(ŚREDNIA = mean(`Stopa zwrotu`),
+            ODCHYLENIE = sd(`Stopa zwrotu`),
+            SKOŚNOŚĆ = skew(`Stopa zwrotu`),
+            KURTOZA = kurtosi(`Stopa zwrotu`))
+dni
+```
+
+Analiza wskazuje, że średnie stopy zwrotu różnią się w zależności od dnia tygodnia. W środę rozkład stóp zwrotu wykazuje największą zmienność i asymetrię.
+
+## Histogramy
+
+```{r}
+akcje %>%
+  ggplot() +
+  geom_histogram(aes(x = `Stopa zwrotu`),
+                 color = "darkgreen",
+                 fill = "lightgreen",
+                 bins = 10) +
+  facet_wrap(~ `Dzień tygodnia`,
+             ncol = 3) +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5),
+        strip.background = element_rect(fill = "lightgreen"),
+        strip.text = element_text(color = "darkgreen"),
+        panel.spacing = unit(1, "lines")) +
+  labs(title = "Wykres histogramu",
+       x = "Stopa zwrotu",
+       y = "Liczba dni")
+```
+
+Pomimo zbliżonych średnich stóp zwrotu bliskich zeru, histogramy dla poszczególnych dni tygodnia różnią się pod względem szerokości i asymetrii. Środa wydaje się być dniem charakteryzującym się większym zakresem i obecnością dni z wyższymi stawkami zwrotu, podczas gdy pozostałe dni są bardziej skupione wokół zera, z niewielkimi fluktuacjami. Środa może przynosić zatem większe szanse na zyski, ale jednocześnie niesie ze sobą większe ryzyko ze względu na większą zmienność. Pozostałe dni tygodnia są bardziej stabilne.
+
+## Wykresy pudełkowe
+
+```{r}
+akcje %>%
+  ggplot() +
+  geom_boxplot(aes(x = `Stopa zwrotu`, y = `Dzień tygodnia`),
+                 color = "darkgreen") +
+  coord_flip() +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title = "Wykres pudełkowy",
+       x = "Stopa zwrotu")
+```
+
+W przeciwieństwie do 1/3 próbki, już na samym początku możemy zauważyć większą ilość wartości odstających. Możemy również zaobserwować, że największa outlier występuje w środę, co bezpośrednie uzasadnienie znajduje w poprzednich statystykach opisowych i histogramach. Zmianom uległy także długości pudełka oraz wąsów. 
+
+## Analiza wariancji
+
+### ANOVA
+
+Teraz, przejdziemy do analizy wariancji ANOVA, aby zbadać równość wartości oczekiwanych stóp zwrotu w poszczególnych dniach tygodnia.
+
+```{r}
+anova <- aov(akcje$`Stopa zwrotu` ~ akcje$`Dzień tygodnia`)
+summary(anova)
+```
+
+P-value jest większe niż 0.05, więc nie ma podstaw do odrzucenia hipotezy H0. Na tej podstawie można stwierdzić, że nie ma istotnej różnicy w stopach zwrotu na tym poziomie istotności.
+
+Teraz przejdziemy do sprawdzenia założeń ANOVA do których należą:
+
+```         
+Test normalności 
+Test homogeniczności wariancji
+```
+
+### Pochodzenie danych z rozkładu normalnego
+
+Przejdźmy do testu normalności.
+
+```{r}
+tapply(akcje$`Stopa zwrotu`, akcje$`Dzień tygodnia`, shapiro.test)
+```
+
+Analizując powyższe wyniki naszego testu, można stwierdzić, że tylko w piątek poziom p-value przekroczył wartość 0.05, więc w ten dzień brakuje podstaw do odrzucenia hipotezy H0 o normalności rozkładu. Co do reszty dni, hipotezę H0 możemy odrzucić i zakładać brak normalności danych.
+
+### Homogeniczność wariancji
+
+Następnie sprawdzamy, czy wariancje dla poszczególnych dni różnią się od siebie.
+
+```{r}
+bartlett.test(akcje$`Stopa zwrotu` ~ akcje$`Dzień tygodnia`)
+```
+
+Wyniki testu Bartletta dostarczają podstawy do odrzucenia hipotezy zerowej o równości wariancji między grupami. Oznacza to, że wariancje stóp zwrotu różnią się w zależności od dnia tygodnia.
+
+### Wnioski
+
+Ze względu na fakt, że nie wszystkie założenia do testu ANOVA zostały spełnione, jej wyniki nie są wiążące.
+
+# Podsumowanie
+
+Na podstawie przeprowadzonej analizy możemy wyciągnąć kilka wniosków. Przede wszystkim zauważamy, że wraz ze wzrostem zbioru danych wartości odchylają się w mniejszym stopniu. W przypadku analizy wariancji, w przeciwieństwie do 1/3 próbki, dla całego zbioru danych nie wszystkie założenia ANOVA są spełnione. Prawdopodobnie wynika to z faktu, że w dłuższej perpektywie czasu na rynku występuje więcej czynników warunkujących zmiany w poziomie stóp zwrotu. 
