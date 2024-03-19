@@ -7,6 +7,11 @@ ProgramowanieR - ćwiczenia:
 - it's a folder where I have stored all of my files used during classes where I learnt
   R programming.
 
+RPiSM:
+- In the above folder, there are files from classes on Probability Theory and Mathematical Statistics.
+  In this course, I collaborated with my colleagues on projects related to Monte Carlo simulations, statistical
+  hypotheses, and models based on MLE method (Maximum Likelihood Estimation).
+
 WstepDoAnalizyDanych - ćwiczenia:
 - it's another folder with files from classes where I learnt the basics of data visualization.
 
