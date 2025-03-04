@@ -1,0 +1,684 @@
+---
+title: "Skalowanie wielowymiarowe"
+author: "Wiktor Kostera"
+date: "grudzień 2024"
+output: 
+  html_document:    
+    theme: bootstrap
+    toc: true
+    highlight: tango
+    toc_float: true
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 100px;
+  overflow-y: auto;
+}
+```
+
+<hr>
+
+# Wprowadzenie
+
+::: {style="text-align: justify;"}
+Zaprezentowana przeze mnie praca stanowi podejście do tematu skalowania wielowymiarowego. Zdecydowałem się na wybór drugiego tematu projektu, zgodnie z którym moim zadaniem jest analiza skalowania wielowymiarowego dla wybranego zestawu danych za pomocą co najmniej trzech wybranych technik.
+:::
+
+<hr>
+
+## Opis projektu
+
+::: {style="text-align: justify;"}
+Przedstawione techniki skalowania wielowymiarowego będą oparte na wiedzy zdobytej na zajęciach. Wykorzystam dwie techniki, zaprezentowane na wykładach tj. klasyczne skalowanie wielowymiarowe oraz skalowanie Sammona. Ponadto swoje badanie wzbogaciłem o niemetryczne skalowanie oraz o skalowanie algorytmem SMACOF (Scaling by MAjorizing a COmplicated Function). Każde skalowanie przeprowadzę w jednym, dwóch oraz trzech wymiarach w celu porównania otrzymanych wyników. Rezultaty zostaną dodatkowo ocenione za pomocą miary dopasowania - wartość STRESS.
+
+Pracę rozpoczynam od załadowania potrzebnych pakietów:
+:::
+
+```{r, message=FALSE, warning=FALSE}
+library(readxl) # odczyt pliku w formacie .xlsx
+library(corrplot) # macierz korelacji
+library(tidyr) # formatowanie ramki danych do wykresów
+library(plotly) # tworzenie wykresów 3D
+library(smacof) # skalowanie metryczne SMACOF - mds()
+library(MASS) # skalowanie niemetryczne - isoMDS()
+```
+
+<hr>
+
+## Zestaw danych
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dane <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Statystyczna analiza danych/Dane_skalowanie.xlsx", 
+                   sheet = "Dane do R")
+dane <- as.data.frame(dane)  
+rownames(dane) <- dane[, 1]
+dane <- dane[, -1]
+colnames(dane) <- c("X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8")
+```
+
+::: {style="text-align: justify;"}
+Wybranych przeze mnie zestaw danych składa się z 8 zmiennych charakterystycznych dla czynników opisujących poziom życia. W tym celu zgromadziłem informacje posługując się Bankiem Danych Lokalnych dla największych miast Polski pod względem ludności. Niektóre z prezentowanych cech zostały odpowiednio przeskalowane w celu zachowania porównywalności obiektów. Opisywane zmienne to:
+:::
+
+-   X1 - Wynagrodzenie brutto [PLN]
+
+-   X2 - Stopa bezrobocia [%]
+
+-   X3 - Cena mieszkania [PLN/m2]
+
+-   X4 - Emisja gazów [t/km2]
+
+-   X5 - Liczba lekarzy na 100tys. mieszkańców
+
+-   X6 - Liczba przestępstw na 100tys. mieszkańców
+
+-   X7 - Liczba terenów zielonych na 1000ha
+
+-   X8 - Liczba wypadków drogowych na 100tys. mieszkańców
+
+<hr>
+
+# EDA
+
+::: {style="text-align: justify;"}
+W pierwszej części projektu poddam krótkiej analizie prezentowany zestaw danych. Zweryfikuje potencjalne związki pomiędzy zmiennymi, ale również przeanalizuje poszczególne statystyki opisowe. Ponadto ocenię zestaw pod kątem wartości odstających.
+
+Zestaw danych na którym będę pracował prezentuje się następująco:
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dane
+```
+
+<hr>
+
+## Statystyki opisowe
+
+::: {style="text-align: justify;"}
+Poniższa tabela przedstawia podstawowe statystyki opisowe charakterystyczne dla badanego zestawu danych.
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+statystyki <- round(data.frame(Średnia = sapply(dane, mean),
+                         Odchylenie = sapply(dane, sd),
+                         `Współczynnik zmienności` = sapply(dane, function(x) sd(x) / mean(x)),
+                         Skośność = sapply(dane, skewness),
+                         Kurtoza = sapply(dane, kurtosis),
+                         Minimum = sapply(dane, min),
+                         Maksimum = sapply(dane, max), check.names=F), 2)
+statystyki
+```
+
+::: {style="text-align: justify;"}
+Patrząc na wartości statystyk opisowych, ale również bezpośrednio na zestaw danych można wyciągnąć kilka ciekawych wniosków. Przede wszystkim zaskakujące są różnice w danych dotyczących przeciętnego wynagrodzenia (X1) oraz średniej ceny za metr kwadratowy mieszkania (X3). Można bowiem zauważyć, że koszt nabycia mieszkania w stolicy jest dwukrotnie większy niż w Białymstoku, które zajmuje ostatnie miejsce w prezentowanym zestawieniu. Mimo to średnie zarobki w Warszawie, przy dwukrotnie wyższych kosztach, nie są w odpowiednim stosunku wyższe.
+
+Zasadniczo wszystkie zmienne, z wyjątkiem liczby przestępstw (X6) charakteryzują się pewną asymetrią prawostronną, która jest szczególnie silna w przypadku liczby lekarzy (X5). Również ta zmienna jako jedyna charakteryzuje się dużą koncentracją danych - kurtoza o wartości 1,38.
+
+Najmniejszy współczynnik zmienności obserwujemy dla wynagrodzenia brutto (X1: 0.11), co oznacza, że zarobki są stosunkowo jednorodne w porównywanych miastach. Podobnie niską zmienność wykazuje liczba lekarzy na 100 tys. mieszkańców (X5: 0.17) oraz liczba przestępstw (X6: 0.17), co sugeruje względnie równy dostęp do usług medycznych i porównywalny poziom przestępczości Wyższe wartości współczynnika zmienności zauważamy w przypadku emisji gazów (X4: 0.41), liczby terenów zielonych (X7: 0.28) oraz liczby wypadków drogowych (X8: 0.54). Wskazuje to na znaczne różnice między miastami pod względem jakości środowiska, dostępności terenów rekreacyjnych i poziomu bezpieczeństwa drogowego. Najwyższą zmienność obserwuje się w przypadku stopy bezrobocia (X2: 0.53), co może odzwierciedlać istotne różnice w sytuacji ekonomicznej i rynku pracy w badanych lokalizacjach.
+:::
+
+<hr>
+
+## Macierz korelacji
+
+::: {style="text-align: justify;"}
+Warto jednak jeszcze zwrócić uwagę na macierz korelacji, która również może wstępnie dostarczyć kilku istotnych informacji. W obliczeniach zdecydowałem się na skorzystanie z korelacji Tau Kendalla, z uwagi na małą liczbę danych w próbie (10). Ponadto wysoka skośność rozkładu niektórych zmiennych, świadczy o pochodzeniu danych z rozkładów, które nie są zbliżone do rozkładu normalnego, wobec czego użycie korelacji np. Pearsona mogłoby być mało precyzyjne.
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+korelacje <- cor(dane, method="kendall")
+round(korelacje, 2)
+corrplot(korelacje, method = "square", type = "upper") 
+```
+
+::: {style="text-align: justify;"}
+Oczywisty związek zachodzi między wynagrodzeniem brutto (X1), a cenami mieszkań (X3) (r = 0.87), co sugeruje, że w miastach o wyższych zarobkach ceny nieruchomości również są wyższe. Wysoka dodatnia korelacja występuje także między liczbą przestępstw (X6) a wynagrodzeniem brutto (X1) (r = 0.64), co może wynikać z faktu, że większe miasta o wyższych zarobkach charakteryzują się większą liczbą zgłoszonych przestępstw.
+
+Z kolei silna odwrotna korelacja występuje między stopą bezrobocia (X2), a wynagrodzeniem brutto (X1) (r = -0.60) oraz między stopą bezrobocia (X2), a liczbą przestępstw (X6) (r = -0.64). Wskazuje to, że w miastach o wyższym poziomie bezrobocia zarobki są niższe, a poziom przestępczości jest mniejszy, co może wynikać z różnic w urbanizacji lub strukturze społecznej. Korelacje kolejnych zmiennych, takie jak te dotyczące emisji gazów (X4) czy liczby lekarzy (X5), są zazwyczaj słabe (bliskie 0), co oznacza brak wyraźnych relacji między nimi, a pozostałymi zmiennymi.
+:::
+
+<hr>
+
+## Wartości odstające
+
+::: {style="text-align: justify;"}
+Ostatnim elementem nad którym chciałbym się pochylić przed rozpoczęciem analizy dotyczącej skalowania wielowymiarowego są potencjalnie występujące wartości odstające.
+:::
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dane <- scale(dane)
+dane <- as.data.frame(dane)
+
+stand_long <- dane %>%
+  pivot_longer(cols = everything(), 
+               names_to = "Variable", 
+               values_to = "Value")
+stand_long$Variable <- factor(stand_long$Variable, 
+                              levels = c("X1", "X2", "X3", "X4", "X5", 
+                                         "X6", "X7", "X8"))
+
+stand_long %>%
+  ggplot() +
+  geom_boxplot(aes(x = Variable, y = Value),
+               color = "darkgreen") +
+  theme_light() +
+  theme(plot.title = element_text(hjust = 0.5, 
+                                  face = "bold"),
+        axis.text.x = element_text(angle = 45,
+                                   hjust = 1)) + 
+  labs(title = "Wykresy pudełkowe",
+       x = "Zmienna",
+       y = "Zestandardyzowana wartość zmiennej") 
+```
+
+::: {style="text-align: justify;"}
+Zauważalne są dwie, które dotyczą liczby lekarzy (X5) w mieście Lublin oraz miasta Gdańsk w przypadku emisji gazów (X4). O ile pierwszy z nich trudno uzasadnić, o tyle drugi może wynikać z charakterystyki przemysłowej Gdańska, który posiada port i przemysł, co może prowadzić do większej emisji zanieczyszczeń.
+:::
+
+<hr>
+
+# Skalowanie wielowymiarowe - miara dopasowania
+
+::: {style="text-align: justify;"}
+W celu oceny jakości dopasowania danego skalowania zdecydowałem się każdy wynik oprzeć o wartość funkcji STRESS. Jest to miara dopasowania, która wyraża się następującym wzorem:
+
+$$
+STRESS = \left(\frac{\sum_{i,k}{(d_{ij} - \hat{d_{ij}})^2}} {\sum_{i,j}{d_{ij}^2}}\right)^{1/2}
+$$
+
+* $d_{ij}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie początkowych danych)
+
+* $\hat{d_{ij}}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie wartości uzyskanych po zastosowaniu skalowania wielowymiarowego)
+
+Należy mieć jednak na uwadze to, że każdy z zaprezentowanych sposobów skalowania  umożliwia bezpośrednio odczytanie wartości zwracanej funkcji STRESS. Niestety dokumentacje często nie podają odpowiednich wzorów wobec czego oparcie analizy na takich wartościach może być mało precyzyjne i prowadzić do błędnych interpretacji. Z tego powodu zdecydowałem się na własnoręczne obliczenie każdej z takich wartości. 
+
+Jednakże każda funkcja prowadzi również do macierzy odległości pomiędzy odwzorowanymi punktami, która może być otrzymana według różnych kryteriów, algorytmów i sposobów przekształceń. By zapewnić skuteczne porównanie postanowiłem za każdym razem użyć w obliczeniach przeskalowanej macierzy odległości danych wejściowych oraz tych otrzymanych w wyniku skalowania. W tym celu dane z każdej macierzy podzieliłem przez ich średnią wartość.
+
+```{r, message=FALSE, warning=FALSE}
+odleglosci_s <- dist(dane) / mean(dist(dane))
+
+# analogiczne działanie będzie wykonywane na macierzy odległości otrzymanej w wyniku skalowania wielowymiarowego
+```
+
+Dopasowanie skalowania do danych wejściowych wynika z otrzymanej wartości STRESS:
+
+* $>0,2$ - bardzo słabe
+
+* $0,1 - 0,2$ - słabe
+
+* $0,05 - 0,1$ - średnie
+
+* $0,02 - 0,05$ - dobre
+
+* $0 - 0,02$ - bardzo dobre
+
+* $0$ - idealnie
+:::
+
+<hr>
+
+# Klasyczne skalowanie wielowymiarowe
+
+::: {style="text-align: justify;"}
+Klasyczne skalowanie wielowymiarowe znane również jako PCoA (Principal Coordinates Analysis) to liniowe podejście do zmniejszenia wymiaru danych przy jak najmniejszym zniekształceniu prawdziwych odległości. Jest to metoda jednokrokowa, która opiera się na odległościach euklidesowych. Polega na minimalizacji sumy kwadratów różnic między oryginalnymi, a wynikowymi odległościami.
+
+$$
+S = \sum_{i < j} \left( d_{ij} - \hat{d_{ij}} \right)^2
+$$
+
+* $d_{ij}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie początkowych danych)
+
+* $\hat{d_{ij}}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie wartości uzyskanych po zastosowaniu skalowania wielowymiarowego)
+
+W języku R można wykorzystać do tego funkcję `cmdscale()`.
+:::
+
+<hr>
+
+## Jeden wymiar
+
+```{r, message=FALSE, warning=FALSE}
+odleglosci <- dist(dane) # macierz odległości 'oryginalnych'
+
+mds11 <- cmdscale(odleglosci, 1) # klasyczne skalowanie wielowymiarowe
+
+x <- dist(mds11) / mean(dist(mds11)) # skalowanie macierzy otrzymanych odległości
+
+stress11 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2)) # obliczanie wartości STRESS
+
+mds11 <- mds11[order(-mds11[, 1]), , drop = F] # sortowanie
+
+mds11 # współrzędne punktów w przeskalowanej przestrzenii
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress11)
+```
+
+::: {style="text-align: justify;"}
+Wysoka wartość miary STRESS świadczy o niewystarczającym dopasowaniu modelu, co uniemożliwia wiarygodną interpretację wyników. Z tego powodu rezygnuję z dalszej analizy tego wymiaru.
+:::
+
+<hr>
+
+## Dwa wymiary
+
+```{r, message=FALSE, warning=FALSE}
+mds12 <- cmdscale(odleglosci, 2)
+
+x <- dist(mds12) / mean(dist(mds12))
+
+stress12 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2)) 
+
+mds12
+
+plot(mds12[,1], mds12[,2], type = "n", xlab = "", ylab = "",
+     main = "Klasyczne skalowanie wielowymiarowe")
+text(mds12[,1], mds12[,2], labels(odleglosci), cex = 0.6, xpd = T)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress12)
+```
+
+::: {style="text-align: justify;"}
+Dwa wymiary prowadzą do lepszego dopasowania, jednak miara STRESS wciąż jest dosyć duża.
+:::
+
+<hr>
+
+## Trzy wymiary
+
+```{r, message=FALSE, warning=FALSE}
+mds13 <- cmdscale(odleglosci, 3)
+
+x <- dist(mds13) / mean(dist(mds13))
+
+stress13 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds13
+
+plot_ly(x = mds13[, 1], 
+        y = mds13[, 2], 
+        z = mds13[, 3], 
+        type = "scatter3d",
+        mode = "markers+text",
+        text = rownames(mds13), 
+        marker = list(size = 4, color = 'darkblue'),
+        textfont = list(size = 10))
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress13)
+```
+
+::: {style="text-align: justify;"}
+Miara STRESS pozostaje wysoka, jednak trzy wymiary to jedyna opcja, która pozwala na sensowną intepretację.
+
+Wykres pokazuje, że zdecydowanie z największych miast Polski wyróżnia się Lublin. Jest on daleki od podobieństw z pozostałymi miastami. Może to wynikać m.in. z bardzo wysokiej stopy bezrobocia (5,1%) oraz niskiego wynagrodzenia brutto (6402,56 PLN), czy też niskiej liczby terenów zielonych (53,4 na 1000 ha).
+
+Warszawa, jako stolica, również wyróżnia się na tle innych miast, choć w mniejszym stopniu niż Lublin. Najbliżej tego miasta znajdują się Kraków i Gdańsk, co sugeruje pewne podobieństwa np. w zakresie wynagrodzeń czy też kosztów życia.
+
+Badając inny scenariusz w którym można wyróżnić więcej grup, można odnieść wrażenie, że Kraków jest również podobny do Wrocławia i Poznania. Kolejną grupę mogłyby wówczas tworzyć miasta: Bydgoszcz, Łódź i Szczecin.
+:::
+
+<hr>
+
+# Skalowanie Sammona
+
+::: {style="text-align: justify;"}
+Skalowanie Sammona to metoda nieliniowej redukcji wymiarowości, która wykorzystuje odległości metryczne, najczęściej euklidesowe, do odwzorowania relacji między obiektami w przestrzeni niskowymiarowej. Kładzie szczególny nacisk na dokładne odwzorowanie małych odległości poprzez odpowiedni dobór wag dla każdej pary punktów. Jest to metoda iteracyjna, rozwiązująca problem optymalizacyjny, w którym minimalizowany jest błąd Sammona wyrażany wzorem:
+$$
+E = \frac{1} {\sum_{i<j}d_{ij}} \sum^{N}_{i<j} \frac{(d_{ij} - \hat d_{ij})^2} {d_{ij}}
+$$
+
+* $d_{ij}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie początkowych danych)
+
+* $\hat{d_{ij}}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie wartości uzyskanych po zastosowaniu skalowania wielowymiarowego)
+
+RStudio pozwala na przeprowadzenie takiego skalowanie za pomocą funkcji `sammon()`.
+:::
+
+<hr>
+
+## Jeden wymiar
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds21 <- sammon(odleglosci, k = 1) # skalowanie Sammona
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds21$points # współrzędne punktów w przeskalowanej przestrzenii
+
+x <- dist(x) / mean(dist(x)) # skalowanie macierzy otrzymanych odległości
+
+stress21 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2)) # obliczanie wartości STRESS
+
+mds21$points[order(-mds21$points[, 1]), , drop = F] # sortowanie
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress21)
+```
+
+::: {style="text-align: justify;"}
+Uzyskana wartość miary STRESS wskazuje na słabą jakość dopasowania, przez co analiza nie pozwala na wyciągnięcie wiarygodnych wniosków. W związku z tym nie podejmuję się dalszej interpretacji.
+:::
+
+<hr>
+
+## Dwa wymiary
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds22 <- sammon(odleglosci, k = 2)
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds22$points
+
+x <- dist(x) / mean(dist(x))
+
+stress22 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds22$points
+
+plot(mds22$points[,1], mds22$points[,2], type = "n", xlab = "", ylab = "",
+     main = "Skalowanie Sammona")
+text(mds22$points[,1], mds22$points[,2], labels(odleglosci), cex = 0.6, xpd = T)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress22)
+```
+
+::: {style="text-align: justify;"}
+Przy analizie w dwóch wymiarach uzyskano lepsze dopasowanie, jednak wartość miary STRESS pozostaje na stosunkowo wysokim poziomie.
+:::
+
+<hr>
+
+## Trzy wymiary
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds23 <- sammon(odleglosci, k = 3)
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds23$points
+
+x <- dist(x) / mean(dist(x))
+
+stress23 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds23$points
+
+plot_ly(x = mds23$points[, 1], 
+        y = mds23$points[, 2], 
+        z = mds23$points[, 3], 
+        type = "scatter3d",
+        mode = "markers+text",
+        text = rownames(mds23$points), 
+        marker = list(size = 4, color = 'darkgreen'),
+        textfont = list(size = 10))
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress23)
+```
+
+::: {style="text-align: justify;"}
+Skalowanie Sammona w przypadku trzech wymiarów prowadzi jak na razie do najlepszych rezultatów.
+
+Ponownie Lublin zdecydowanie najbardziej odstaje od pozostałych miast. Tym razem z pewnością jako podobne miasto można uznać Białystok, ale również Bydgoszcz. Wskazane miasta charakteryzują się bardzo podobnymi wynagrodzeniami na poziomie 6400 złotych brutto oraz niskimi kosztami nabycia mieszkania. Ponadto mogą się pochwalić niskim poziomem przestępczości oraz wysokim wskaźnikiem bezpieczeństwa drogowego.
+
+Kolejny oczywisty podział to ponownie Warszawa, Gdańsk i Kraków. Do tej grupy można również zaliczyć Wrocław. Zdecydowanie wyróżnia je najlepszy rynek pracy i szersze perspektywy zawodowe. Z drugiej strony wysokie koszty, większa liczba przestępstw i wypadków drugowych.
+
+Ostatnią grupę tworzą Poznań, Łódź, Szczecin. Cechą łączącą oba miasta jest zdecydowanie duży obszar terenów zielonych, ale również bardzo duża liczba wypadków samochodowych.
+:::
+
+<hr>
+
+# Skalowanie SMACOF
+
+::: {style="text-align: justify;"}
+Skalowanie SMACOF (Scaling by Majorizing a Complicated Function) to kolejna metoda nieliniowego, metrycznego skalowania wielowymiarowego. Metoda ta wykorzystuje iteracyjny algorytm, który w każdej iteracji przybliża rozwiązanie, minimalizując funkcję celu. W funkcji `mds()` z pakietu `smacof` w R, minimalizowany jest stres SMACOF opierający się na wagach punktów. Ponieważ w prezentowanym przypadku nie są rozważane żadne wagi, wzór jest równoważny ze wzorem na STRESS:
+
+$$
+STRESS = \left(\frac{\sum_{i,j}{(d_{ij} - \hat{d_{ij}})^2}} {\sum_{i,j}{d_{ij}^2}}\right)^{1/2}
+$$
+
+* $d_{ij}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie początkowych danych)
+
+* $\hat{d_{ij}}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie wartości uzyskanych po zastosowaniu skalowania wielowymiarowego)
+:::
+
+## Jeden wymiar
+
+```{r, message=FALSE, warning=FALSE}
+mds31 <- mds(odleglosci, type="ratio", ndim = 1) # skalowanie SMACOF
+
+x <- mds31$conf # współrzędne punktów w przeskalowanej przestrzenii
+
+x <- dist(x) / mean(dist(x)) # skalowanie macierzy otrzymanych odległości
+
+stress31 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2)) # obliczanie wartości STRESS
+
+mds31$conf[order(-mds31$conf[, 1]), , drop = F] # sortowanie
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress31)
+```
+
+::: {style="text-align: justify;"}
+Wysoka wartość miary STRESS wskazuje na słabe dopasowanie modelu, co sprawia, że interpretacja wyników nie jest wiarygodna. W związku z tym decyduję się na rezygnację z dalszej analizy w tym wymiarze.
+:::
+
+<hr>
+
+## Dwa wymiary
+
+```{r, message=FALSE, warning=FALSE}
+mds32 <- mds(odleglosci, type="ratio", ndim = 2)
+
+x <- mds32$conf
+
+x <- dist(x) / mean(dist(x))
+
+stress32 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds32$conf
+
+plot(mds32$conf[,1], mds32$conf[,2], type = "n", xlab = "", ylab = "",
+     main = "Skalowanie SMACOF")
+text(mds32$conf[,1], mds32$conf[,2], labels(odleglosci), cex = 0.6, xpd = T)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress32)
+```
+
+::: {style="text-align: justify;"}
+Analiza w dwóch wymiarach przyniosła poprawę dopasowania, jednak wartość miary STRESS nadal utrzymuje się na relatywnie wysokim poziomie.
+:::
+
+<hr>
+
+## Trzy wymiary
+
+```{r, message=FALSE, warning=FALSE}
+mds33 <- mds(odleglosci, type="ratio", ndim = 3)
+
+x <- mds33$conf
+
+x <- dist(x) / mean(dist(x))
+
+stress33 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds33$conf
+
+plot_ly(x = mds33$conf[, 1], 
+        y = mds33$conf[, 2], 
+        z = mds33$conf[, 3], 
+        type = "scatter3d",
+        mode = "markers+text",
+        text = rownames(mds33$conf), 
+        marker = list(size = 4, color = 'darkred'),
+        textfont = list(size = 10))
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress33)
+```
+
+::: {style="text-align: justify;"}
+Skalowanie tą metodą prowadzi do uzyskania najmniejszej wartości STRESS, a co za tym idzie do najlepszego dopasowania. Wyniki jednak są bardzo zbliżone do poprzedniej metody - skalowania Sammona. 
+
+Ponownie z jednej strony wyróżnia się Lublin wraz z Białymstokiem i Bydgoszczą. Z drugiej zaś ponownie zauważalny jest związek między Krakowem, Wrocławiem, Gdańskiem, a Warszawą. Ostatnią grupę tworzą Łódź, Szczecin i Poznań.
+:::
+
+<hr>
+
+# Skalowanie niemetryczne
+
+::: {style="text-align: justify;"}
+Niemetryczne skalowanie wielowymiarowe (nieliniowe MDS) to metoda redukcji wymiarowości, której celem jest odwzorowanie relacji między obiektami poprzez zachowanie porządku rangowego odległości, a nie ich dokładnych wartości. Jest to szczególnie przydatne w przypadku danych mierzonych na skali porządkowej, gdzie istotna jest kolejność, a nie wielkość różnic między obiektami. Skalowanie można jednak stosować również do danych metrycznych. Metoda ta jest iteracyjna i w przypadku funkcji `isoMDS()` w R minimalizowany jest stres Kruskala, określany wzorem:
+
+$$
+S = \left(\frac{\sum_{i < j} \left(d_{ij} - f(\hat{d_{ij}})\right)^2}{\sum_{i < j} (d_{ij})^2}\right)^{1/2}
+$$
+
+* $d_{ij}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie początkowych danych)
+
+* $\hat{d_{ij}}$ - odległość pomiędzy i-tym i j-tym obiektem (wyznaczona na podstawie wartości uzyskanych po zastosowaniu skalowania wielowymiarowego)
+
+* $f(\hat{d_{ij}})$ - monotoniczna funkcja dopasowująca odległości w przestrzeni wynikowej do odległości rangowych
+
+:::
+
+<hr>
+
+## Jeden wymiar
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds41 <- isoMDS(odleglosci, k = 1) # skalowanie niemetryczne
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds41$points # współrzędne punktów w przeskalowanej przestrzenii
+
+x <- dist(x) / mean(dist(x)) # skalowanie macierzy otrzymanych odległości
+
+stress41 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2)) # obliczanie wartości STRESS
+
+mds41$points[order(-mds41$points[, 1]), , drop = F] # sortowanie
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress41)
+```
+
+::: {style="text-align: justify;"}
+Duża wartość miary STRESS sugeruje słabe odwzorowanie relacji między danymi, co sprawia, że interpretacja wyników byłaby niewiarygodna. W konsekwencji odstępuję od dalszej analizy.
+:::
+
+<hr>
+
+## Dwa wymiary
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds42 <- isoMDS(odleglosci, k = 2)
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds42$points
+
+x <- dist(x) / mean(dist(x))
+
+stress42 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds42$points
+
+plot(mds42$points[,1], mds42$points[,2], type = "n", xlab = "", ylab = "",
+     main = "Skalowanie niemetryczne")
+text(mds42$points[,1], mds42$points[,2], labels(odleglosci), cex = 0.6, xpd = T)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress42)
+```
+
+::: {style="text-align: justify;"}
+Choć model w dwóch wymiarach charakteryzuje się lepszym dopasowaniem, miara STRESS wciąż wskazuje na stosunkowo wysoką niedokładność odwzorowania.
+:::
+
+<hr>
+
+## Trzy wymiary
+
+```{r, message=FALSE, warning=FALSE, results='hide'}
+mds43 <- isoMDS(odleglosci, k = 3)
+```
+
+```{r, message=FALSE, warning=FALSE}
+x <- mds43$points
+
+x <- dist(x) / mean(dist(x))
+
+stress43 <- sqrt(sum((odleglosci_s - x)^2) / sum(odleglosci_s^2))
+
+mds43$points
+
+plot_ly(x = mds43$points[, 1], 
+        y = mds43$points[, 2], 
+        z = mds43$points[, 3], 
+        type = "scatter3d",
+        mode = "markers+text",
+        text = rownames(mds23$points), 
+        marker = list(size = 4, color = 'gray'),
+        textfont = list(size = 10))
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+cat("Wartość funkcji STRESS wynosi:", stress43)
+```
+
+::: {style="text-align: justify;"}
+Skalowanie niemetryczne, mimo gorszej wartości miary dopasowania, prowadzi do wyników zbliżonych do uzyskanych w dwóch poprzednich metodach. Główną różnicą, którą można zauważyć, jest lokalizacja Wrocławia w przestrzeni trójwymiarowej. Miasto to nie wykazuje wyraźnej przynależności do żadnej konkretnej grupy. Jest ono równie oddalone od Warszawy, Krakowa i Gdańska, co od Łodzi, Szczecina i Poznania, co utrudnia jednoznaczną klasyfikację.
+:::
+
+<hr>
+
+# Podsumowanie
+
+Poniższa tabela prezentuje wartości miary STRESS uzyskane poszczególnymi metodami dla konkretnych wymiarów.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+wyniki_stress <- round(data.frame(Klasyczne = c(stress11, stress12, stress13),
+                            Sammon = c(stress21, stress22, stress23),
+                            SMACOF = c(stress31, stress32, stress33),
+                            Niemetryczne = c(stress41, stress42, stress43),
+                            row.names = c("Jeden wymiar", "Dwa wymiary", "Trzy wymiary")), 4)
+wyniki_stress
+```
+
+::: {style="text-align: justify;"}
+Wyniki wyraźnie pokazują, że w przypadku badanego zestawu danych najlepiej sprawdził się algortym SMACOF. Bardzo podobne wyniki prezentuje skalowanie Sammona. Z kolei do najgorszych rezultatów doprowadziło klasyczne skalowanie wielowymiarowe. Jego wyniki zdecydowanie w najmniejszym stopniu pokrywały się z pozostałymi metodami.
+
+Na podstawie przeprowadzonego badania można wysunąć kilka oczywistych wniosków. Niektóre z największych miast Polski pod względem ludności charakteryzują się bardziej zbliżonymi cechami.
+
+Pierwszą grupą jest zdecydowanie Warszawa jako stolica Polski, wraz z Gdańskiem i Krakowem. Te trzy miasta szczycą się najlepszymi perspektywami na rynku pracy, wynikającymi z niskiej stopy bezrobocia przy jednocześnie najwyższych wynagrodzeniach. Z kolei życie w jednym z nich wiąże się również z większymi kosztami nabycia nieruchomości. Z drugiej strony zauważalna jest większa emisja gazów, a zatem gorsza jakość powietrza. Ostatnim istotnym czynikiem jest wzmożona przestępczość na tych obszarach.
+
+Kolejną grupą są miasta, które również w każdej z metod wykazywały pewne podobieństwa. Mowa tu o Lublinie, Bydgoszczy i Białymstoku. Wszystkie te miasta charakteryzują się zbliżonym poziomem wynagrodzeń, wynoszącym około 6400 zł brutto, a także niskimi kosztami zakupu mieszkań. Dodatkowo, cechują się niskim poziomem przestępczości oraz stosunkowo wysokim poziomem bezpieczeństwa na drogach.
+
+Trzecią grupę tworzą Poznań, Łódź i Szczecin, które są podobne pod względem dużego obszaru terenów zielonych oraz wysokiej liczby wypadków drogowych. 
+
+Pozostaje kwestia Wrocławia. Szczególnie ostatnia metoda wykazała, że trudno zakwalifikować to miasto do konkretnej grupy. Z jednej strony niska stopa bezrobocia, wysokie zarobki i ceny mieszkań, a także duża przestępczość są charakterystyczne dla pierwszej grupy łączącej Kraków, Gdańsk i Warszawę. Z drugiej zaś, duża powierzchnia terenów zielonych oraz liczba wypadków drogowych i jednocześnie niska emisja gazów świadczą o podobieństwach z miastami Łódź, Szczecin i Poznań.
+:::
