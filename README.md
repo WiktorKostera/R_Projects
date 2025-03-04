@@ -1,3 +1,8 @@
+IMRR
+
+StatystycznaAnalizaDanych:
+- projects with linear ordering, cluster analysis and multidimensional scalling.
+
 EDA - Spotify:
 - it's a folder where you can take a look at my first Exploratory Data Analysis
   provided with dataset from kaggle.com. Analysis is about top hits from Spotify from period
