@@ -1,4 +1,5 @@
-IMRR
+IMRR:
+- quantatitaive measures and calculation of VaR and ES using various methods and evaluation of obtained values through backtesting.
 
 StatystycznaAnalizaDanych:
 - projects with linear ordering, cluster analysis and multidimensional scalling.
