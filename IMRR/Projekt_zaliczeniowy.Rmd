@@ -1,0 +1,521 @@
+---
+title: "Projekt zaliczeniowy"
+author: "Wiktor Kostera"
+date: "Styczeń 2025"
+output: 
+  html_document:    
+    theme: bootstrap
+    toc: true
+    highlight: tango
+    toc_float: true
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 300px;
+  overflow-y: auto;
+}
+```
+
+<hr>
+
+# Wprowadzenie
+
+::: {style="text-align: justify;"}
+Niniejszy projekt stanowi przegląd i analizę różnych metod obliczania wartości VaR (Value-at-Risk) oraz ES (Expected Shortfall). Celem badania jest nie tylko przedstawienie tych metod, ale także ich praktyczne zastosowanie na rzeczywistych danych oraz ocena ich skuteczności przy użyciu testowania wstecznego.
+
+W ramach projektu wybrano pięć metod, które zostaną szczegółowo omówione i porównane:
+
+* Metoda historyczna,
+
+* Metoda historyczna z wagami,
+
+* Metoda z wykorzystaniem modelu EWMA,
+
+* Metoda z wykorzystaniem modelu GARCH(1, 1),
+
+* Metoda z wykorzystaniem symulacji Monte Carlo.
+
+Dane wykorzystane w projekcie obejmują ceny zamknięcia kursu walutowego EUR/PLN z okresu od 30 listopada 2012 roku do 29 listopada 2024 roku, co przekłada się na próbę trwającą 12 lat i obejmującą 3099 dni roboczych.
+
+Przed przystąpieniem do obliczeń dane zostaną odpowiednio przekształcone w celu wyznaczenia dziennych prostych stóp zwrotu. Następnie dla każdej z metod zostaną obliczone wartości VaR oraz ES, z wykorzystaniem okna 500 dni jako horyzontu analizy. W prezentowanym badaniu zdecydowano na wybór 99% wartości VaR. Obliczone wartości zostaną dodatkowo przedstawione na wykresach, co pozwoli na wizualizację zmian w czasie oraz porównanie wyników między metodami.
+
+Ważnym elementem projektu będzie ocena skuteczności każdej metody poprzez testowanie wsteczne obliczonego VaR. W tym celu zastosowane zostaną trzy różne testy:
+
+* Test z wykorzystaniem rozkładu dwumianowego,
+
+* Test Kupca,
+
+* Test Christoffersena.
+
+Głównym celem badania jest odpowiedź na pytanie: która z metod prowadzi do najdokładniejszych i najbardziej wiarygodnych oszacowań VaR w kontekście badanego zestawu danych? Projekt ma na celu nie tylko porównanie metod pod względem ich efektywności, ale także dostarczenie praktycznych wniosków na temat ich zastosowania w analizie ryzyka finansowego.
+:::
+
+<hr>
+
+# Opis danych
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(readxl)
+library(dplyr)
+library(e1071)
+library(knitr)
+
+dane <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/dane_kurs_eurpln.xlsx") %>%
+  as.data.frame()
+dane$Zamkniecie <- as.numeric(dane$Zamkniecie)
+dane$Stopy_proste <- c(NA, diff(dane$Zamkniecie) / head(dane$Zamkniecie, -1))
+stopy <- na.omit(dane$Stopy_proste)
+```
+
+::: {style="text-align: justify;"}
+Przedmiotem analizy są dane dotyczące kursu EUR/PLN z okresu od 30 listopada 2012 roku do 29 listopada 2024 roku, obejmujące 3099 dni roboczych. Poniższa tabela przedstawia statystyki opisowe cen zamknięcia:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+sd <- sd(dane$Zamkniecie)
+mean <- mean(dane$Zamkniecie)
+skewness <- skewness(dane$Zamkniecie)
+kurtosis <- kurtosis(dane$Zamkniecie)
+min <- min(dane$Zamkniecie)
+max <- max(dane$Zamkniecie)
+
+statystyki <- round(data.frame(Średnia = mean,
+                         Odchylenie_standardowe = sd,
+                         Wsp_zmienności = sd/mean,
+                         Skośność = skewness,
+                         Kurtoza = kurtosis,
+                         Minimum = min,
+                         Maksimum = max), 4)
+
+kable(statystyki)
+```
+
+
+Euro jest stabilną walutą o czym świadczy bardzo niska wartość współczynnika zmienności (0.0404). Rozkład badanej próbki jest delikatnie wypłaszczony względem rozkładu normalnego (kurtoza: -0.3079), a dodatni współczynnik skośności (0.7132) świadczy o potencjalnych wartościach odstających po prawej stronie rozkładu.
+
+Kolejne wykresy przedstawiają jak zmieniały się wartości cen zamknięcia oraz obliczonych stóp zwrotu na przestrzeni czasu.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+daty <- as.Date(dane$Data)
+
+plot(daty, dane$Zamkniecie, type = "l", col="darkgreen", main="Wykres cen zamknięcia", ylab="Wartość", xlab="Data", xaxt="n")
+axis(1, at=seq(from=min(daty), to=as.Date("2024-11-30"), by="2 years"), labels=format(seq(from=min(daty), to=as.Date("2024-11-30"), by="2 years"), "%Y"))
+
+plot(head(daty, -1), stopy, type = "l", col="darkgreen", main="Wykres prostych stóp zwrotu", ylab="Wartość", xlab="Data", xaxt="n")
+axis(1, at=seq(from=min(daty), to=as.Date("2024-11-30"), by="2 years"), labels=format(seq(from=min(daty), to=as.Date("2024-11-30"), by="2 years"), "%Y"))
+```
+
+Na wykresach możemy zauważyć istotne zmiany w latach 2020-2022. Były one spowodowane kilkoma geopolitycznymi wydarzeniami jak wybuch wojny na Ukrainie czy towarzyszący okres pandemii COVID-19. Gwałtowane spadki/wzroty kursu są widoczne na wykresie stóp zwrotu. Szczególnie zauważalna jest chwilowa zmiana, gdzie historycznie wartość euro przekroczyła 5 zł.
+:::
+
+<hr>
+
+# Sposoby obliczania VaR
+
+::: {style="text-align: justify;"}
+Kolejna część projektu jest poświęcona sposobom obliczania VaR oraz wartości ES. Szczegółowa implementacja wraz z odpowiednimi wizualizacjami zostanie przedstawiona w dalszej części pracy.
+:::
+
+<hr>
+
+## Metoda historyczna
+
+::: {style="text-align: justify;"}
+Pierwsza metoda to metoda historyczna polegająca na wybraniu odpowiedniego kwantyla z danych historycznych.
+
+```{r, message=FALSE, warning=FALSE}
+n <- length(stopy) # rozmiar wszystkich danych
+VAR <- c() # przygotowanie wektora do przechowywania obliczonej wartości VaR
+ES <- c() # przygotowanie wektora do przechowywania obliczonej wartości ES
+
+for(i in 1:(n - 500)) { 
+  x <- stopy[i:(i+499)] # wybór okna 500 wartości
+
+  VAR[i] <- quantile(x, 0.01) # obliczanie VaR
+  
+  ES[i] <- mean(x[x <= VAR[i]]) # obliczanie ES
+}
+```
+:::
+
+<hr>
+
+## Metoda historyczna z wagami
+
+::: {style="text-align: justify;"}
+Metoda historyczna z wagami polega na obliczaniu wartości VaR (Value-at-Risk) i ES (Expected Shortfall) na podstawie danych historycznych, przy czym poszczególnym obserwacjom przypisuje się wagi, które maleją wraz z czasem. Dzięki temu większe znaczenie mają nowsze dane, co pozwala lepiej uwzględnić aktualne warunki rynkowe. Wagi te są obliczane przy użyciu parametru `q`, który determinuje szybkość „zapominania” starszych danych. W metodzie tej dane są sortowane rosnąco, a następnie na podstawie skumulowanego rozkładu prawdopodobieństwa (dystrybuanty) wyznacza się wartość VaR oraz ES. 
+
+```{r, message=FALSE, warning=FALSE}
+VAR1 <- c() # przygotowanie wektora do przechowywania obliczonej wartości VaR
+ES1 <- c() # przygotowanie wektora do przechowywania obliczonej wartości ES
+q <- 0.995 # parametr determinujący szybkość "zapominania" danych historycznych
+p <- c() # przygotowanie wektora do przechowywania wartości prawdopodobieństwa (wag)
+n <- 500 # liczba danych, która będzie brana pod uwagę do obliczania wag
+
+for (i in 1:500) {
+  p[i] <- (q^(n - i) * (1 - q)) / (1 - q^n) # obliczanie prawdopodobieństw (wag)
+}
+
+n <- length(stopy) # rozmiar wszystkich danych
+
+for(i in 1:(n - 500)) {
+  x <- stopy[i:(i+499)] # wybór okna 500 wartości
+  df <- data.frame(x, p) # stworzenie ramki danych składającej się ze stóp zwrotu i przypisanych im wag
+  df <- df[order(df$x, decreasing = F), ] # sortowanie danych rosnąco względem stóp zwrotu
+  
+  skumulowane <- cumsum(df$p) # obliczenie dystrybuanty
+  df <- cbind(df, skumulowane) # dodanie dystrybuanty do ramki danych
+  index <- which.min(abs(df$skumulowane - 0.01)) # szukanie indeksu wiersza przechowującego wartość VaR
+  
+  VAR1[i] <- df$x[index] # przypisanie wartości VaR
+  
+  df <- df[order(df$skumulowane, decreasing = F), ] # sortowanie ramki danych rosnąco względem dystrybuanty
+  
+  subset_df <- df[df$x < VAR1[i], ] # wydzielenie danych z ramki danych, które zawierają wartości potrzebne do obliczenia ES
+  
+  ES1[i] <- sum(subset_df$x * subset_df$p)/sum(subset_df$p) # obliczenie wartości ES
+}
+```
+:::
+
+<hr>
+
+## Metoda z wykorzystaniem modelu EWMA
+
+::: {style="text-align: justify;"}
+Metoda z wykorzystaniem modelu EWMA polega na dynamicznym uwzględnianiu zmienności w obliczeniach VaR i ES. W tym podejściu przeszłe dane historyczne są modyfikowane w oparciu o zmienność obliczoną za pomocą EWMA, co pozwala na dostosowanie wyników do aktualnych warunków rynkowych. Scenariusze historyczne są skalowane w zależności od zmienności, a następnie wykorzystuje się je do wyznaczenia kwantyla (dla VaR) oraz średniej z ekstremalnych strat (dla ES). Dzięki temu metoda uwzględnia zmienność w czasie i lepiej reaguje na zmiany na rynku niż tradycyjna metoda historyczna.
+
+```{r, message=FALSE, warning=FALSE}
+VAR2 <- c() # przygotowanie wektora do przechowywania obliczonej wartości VaR
+ES2 <- c() # przygotowanie wektora do przechowywania obliczonej wartości ES
+n <- length(stopy) # rozmiar wszystkich danych
+wartosci <- c() # wektor pomocniczy
+
+ewma <- function(x, lambda) {
+  n <- length(x)
+  wynik <- rep(NA, n)
+  wynik[1] <- var(x[1:30]) # przyjmuję pierwszą wartość jako wariancję 30 kolejnych
+  for (i in 2:n) {
+    wynik[i] <- lambda * wynik[i - 1] + (1 - lambda) * x[i - 1]^2 # zastosowanie modelu EWMA
+  }
+  return(sqrt(wynik))
+}
+
+for(i in 1:(n - 500)) {
+  x <- stopy[i:(i+499)] # wybór okna 500 wartości
+  
+  zmiennosc <- ewma(x, 0.994) # wywołanie wcześniej zdefiniowanej funkcji do obliczenia zmienności z wykorzystaniem EWMA z parametrem lambda = 0.994
+  
+  for(j in 1:499) {
+    wartosci[j] <- x[j] * zmiennosc[500]/zmiennosc[j] # modyfikacja scenariusza historycznego w oparciu o zmienność uzyskaną za pomocą modelu EWMA
+  }
+  
+  VAR2[i] <- quantile(wartosci, 0.01) # obliczanie VAR
+  
+  ES2[i] <- mean(wartosci[wartosci <= VAR2[i]]) # obliczanie ES
+}
+```
+:::
+
+<hr>
+
+## Metoda z wykorzystaniem modelu GARCH(1, 1)
+
+::: {style="text-align: justify;"}
+Metoda oparta na modelu GARCH(1, 1) podobnie jak EWMA, polega na uwzględnianiu zmienności w obliczaniu VaR i ES. W tym celu scenariusze historyczne są odpowiednio skalowane za pomocą wcześniej uzyskanych wartości zmienności. Następnie podobnie jak w poprzednich metodach obliczany jest odpowiedni kwantyl w celu wyznaczenia VaR oraz ES.
+
+```{r, message=FALSE, warning=FALSE}
+VAR3 <- c() # przygotowanie wektora do przechowywania obliczonej wartości VaR
+ES3 <- c() # przygotowanie wektora do przechowywania obliczonej wartości ES
+n <- length(stopy) # rozmiar wszystkich danych
+wartosci <- c() # wektor pomocniczy
+
+garch <- function(x, alpha, beta) {
+  n <- length(x)
+  gamma <- 1 - alpha - beta
+  wynik <- rep(NA, n)
+  Vl <- var(x) # zakladam ze Vl to wariancja całej próby danych
+  wynik[1] <- var(x[1:30]) # przyjmuję pierwszą wartość jako wariancję 30 kolejnych
+  for (i in 2:n) {
+    wynik[i] <- gamma * Vl + alpha * x[i - 1]^2 + beta * wynik[i - 1] # zastosowanie modelu GARCH(1, 1)
+  }
+  return(sqrt(wynik))
+}
+
+for(i in 1:(n - 500)) {
+  x <- stopy[i:(i+499)] # wybór okna 500 wartości
+  
+  zmiennosc <- garch(x, 0.15, 0.83) # wywołanie wcześniej zdefiniowanej funkcji do obliczenia zmienności z wykorzystaniem GARCH(1, 1) z parametrem alpha = 0.15 oraz beta = 0.83
+  
+  for(j in 1:499) {
+    wartosci[j] <- x[j] * zmiennosc[500]/zmiennosc[j] # modyfikacja scenariusza historycznego w oparciu o zmienność uzyskaną za pomocą modelu GARCH(1, 1)
+  }
+
+  VAR3[i] <- quantile(wartosci, 0.01) # obliczanie VAR
+  
+  ES3[i] <- mean(wartosci[wartosci <= VAR3[i]]) # obliczanie ES
+}
+```
+:::
+
+<hr>
+
+## Metoda z wykorzystaniem symulacji Monte Carlo
+
+::: {style="text-align: justify;"}
+Metoda Monte Carlo polega na generowaniu dużej liczby możliwych scenariuszy stóp zwrotu na podstawie założonego rozkładu normalnego. Średnia oraz odchylenie standardowe są obliczane na podstawie historycznych danych w wybranym oknie czasowym. Następnie na podstawie wygenerowanej próbki losowej określany jest odpowiedni kwantyl jako wartość VaR, a wartość ES jest obliczana jako średnia wartości mniejszych lub odpowiadających VaR.
+
+```{r, message=FALSE, warning=FALSE}
+VAR4 <- c() # przygotowanie wektora do przechowywania obliczonej wartości VaR
+ES4 <- c() # przygotowanie wektora do przechowywania obliczonej wartości ES
+n <- length(stopy) # rozmiar wszystkich danych
+
+for(i in 1:(n - 500)) {
+  x <- stopy[i:(i+499)] # wybór okna 500 wartości
+  srednia <- mean(x) # obliczanie średniej wartości z danego okna
+  odch <- sd(x) # obliczanie odchylenia wartości z danego okna
+  probka <- rnorm(10000, srednia, odch) # losowanie danych z rozkładu normalnego o parametrach wyznaczonych na podstawie próby historycznej
+  VAR4[i] <- quantile(probka, 0.01) # obliczanie VaR
+  ES4[i] <- mean(probka[probka <= VAR4[i]]) # obliczanie ES
+}
+```
+:::
+
+<hr>
+
+# Sposoby testów wstecznych 
+
+Kolejna część projektu stanowi przegląd funkcji, które zostały stworzone w celu przeprowadzenia testów wstecznych. Ich zadaniem będzie próba udzielenia odpowiedzi na pytanie: która z metod najlepiej sprawdza się jako wyznacznik wartości VaR dla badanego zestawu danych.
+
+<hr>
+
+## Test z wykorzystaniem rozkładu dwumianowego
+
+::: {style="text-align: justify;"}
+Test wsteczny z wykorzystaniem rozkładu dwumianowego sprawdza, czy model VaR prawidłowo określa ryzyko na podstawie liczby wyjątków, czyli dni, w których rzeczywista strata przekracza prognozowaną wartość VaR. Przyjmując poziom istotności `p` (np. 1%), oczekujemy, że wyjątków będzie występować średnio `p * n`, gdzie 
+`n` to liczba obserwacji. Test porównuje zaobserwowaną liczbę wyjątków z teoretycznym rozkładem dwumianowym, obliczając prawdopodobieństwo, że liczba wyjątków będzie równa lub większa od zaobserwowanej. Jeśli to prawdopodobieństwo jest większe od poziomu istotności, uznaje się, że model poprawnie wyznaczył VaR. W przeciwnym razie model VaR jest uznawany za niedoszacowany lub przeszacowany.
+
+```{r, message=FALSE, warning=FALSE}
+dwumianowy_test <- function(stopy, VAR, p_var){
+  n <- length(stopy) # rozmiar danych
+  wyjatki <- sum(stopy < VAR) # liczba wyjatków - wartości, które są mniejsze od wartości VaR
+  
+  p <- 1 - p_var # oczekiwane prawdopodobieństwo wystąpienia wyjątku
+  
+  prawdopodobienstwo <- sum(dbinom(wyjatki:n, size = n, prob = p)) # prawdopodobieństwo wystąpienia wykazanej liczby wyjątków
+  
+  wynik <- ifelse(prawdopodobienstwo > p, 1, 0) # jeśli prawdopodobieństwo jest większe niż oczekiwane: 1 - VaR dobrze wyznaczony, jeśli nie: 0 - VaR źle wyznaczony
+  return(wynik)
+}
+```
+:::
+
+<hr>
+
+## Test Kupca
+
+::: {style="text-align: justify;"}
+Test kupca to test statyczny opierający się na logarytmicznej funkcji wiarygodności o rozkładzie chi-kwadrat o jednym stopniu swobody. Parametrami koniecznymi do obliczenia tej statystyki jest rozmiar próby, liczba wartości poniżej wskazanego poziomu VaR oraz oczekiwane prawdopodobieństwo wystąpienia takich wartości. W zależności od wartości otrzymanej statystyki, hipoteza zerowa, która mówi o poprawności wyznaczonego VaRu jest odrzucana lub nie.
+
+```{r, message=FALSE, warning=FALSE}
+kupiec_test <- function(stopy, VAR, p) {
+  n <- length(stopy) # rozmiar danych
+  T <- sum(stopy < VAR) # liczba wyjątków
+  p0 <- p # oczekiwane prawdopodobieństwo wystąpienia wyjątku
+  
+  LR <- -2 * (log((1 - p0)^(n - T) * p0^T) - log(((n - T)/n)^(n - T) * (T/n)^T)) # statystyka testu
+  
+  p_value <- 1 - pchisq(LR, df = 1) # obliczanie pvalue
+  
+  wynik <- ifelse(p_value >= 0.05, 1, 0) # jeśli pvalue jest większe niż poziom istotności (0.05): 1 - VaR dobrze wyznaczony, jeśli nie: 0 - VaR źle wyznaczony
+  return(wynik)
+}
+```
+:::
+
+<hr>
+
+## Test Christoffersena
+
+::: {style="text-align: justify;"}
+Test Christoffersena ocenia nie tylko liczbę przekroczeń prognozowanego VaR, ale również ich kolejność i występowanie zależności czasowych. Test analizuje, czy przekroczenia są losowe w czasie, zgodnie z założeniem niezależności w modelu VaR. Jeżeli pvalue dla obliczonej statystyki testowej przekracza założony poziom istotności, wówczas przyjmowana jest hipoteza zerowa: przekroczenia VaR są niezależne w czasie.
+
+```{r, message=FALSE, warning=FALSE}
+christoffersen_test <- function(stopy, VAR) {
+  wyjatki <- as.integer(stopy < VAR) # utworzenie wektora wyjątków (0 = brak przekroczenia VaR, 1 = przekroczenie VaR)
+  
+  # obliczenie liczności przejść między stanami
+  u00 <- sum(head(wyjatki, -1) == 0 & tail(wyjatki, -1) == 0) # 0 -> 0
+  u01 <- sum(head(wyjatki, -1) == 0 & tail(wyjatki, -1) == 1) # 0 -> 1
+  u10 <- sum(head(wyjatki, -1) == 1 & tail(wyjatki, -1) == 0) # 1 -> 0
+  u11 <- sum(head(wyjatki, -1) == 1 & tail(wyjatki, -1) == 1) # 1 -> 1
+  
+  # prawdopodobieństwa
+  pi <- (u01 + u11) / (u00 + u01 + u10 + u11) # ogólne prawdopodobieństwo przekroczenia
+  pi_01 <- u01 / (u00 + u01) # prawdopodobieństwo przejścia z 0 do 1
+  pi_11 <- u11 / (u10 + u11) # prawdopodobieństwo przejścia z 1 do 1
+  
+  # statystyka testowa
+  L0 <- (1 - pi)^(u00 + u10) * pi^(u01 + u11)
+  L1 <- (1 - pi_01)^u00 * pi_01^u01 * (1 - pi_11)^u10 * pi_11^u11
+  LR <- -2 * log(L0 / L1)
+  
+  p_value <- 1 - pchisq(LR, df = 1) # obliczanie pvalue
+  
+  wynik <- ifelse(p_value >= 0.05, 1, 0) # jeśli pvalue jest większe niż poziom istotności (0.05): 1 - VaR dobrze wyznaczony (przekroczenia VaR są niezależne w czasie), jeśli nie: 0 - VaR źle wyznaczony (przekroczenia VaR nie są niezależne w czasie)
+  return(wynik)
+}
+```
+
+```{r echo=FALSE}
+dwumianowy <- matrix(NA, nrow = n - 500, ncol = 4)
+kupiec <- matrix(NA, nrow = n - 500, ncol = 4)
+christoffersen <- matrix(NA, nrow = n - 500, ncol = 4)
+
+for(i in 1:(n - 500)) {
+  x <- stopy[i:(i + 499)]
+  
+  dwumianowy[i, ] <- c(dwumianowy_test(x, VAR1[i], 0.99),
+                       dwumianowy_test(x, VAR2[i], 0.99),
+                       dwumianowy_test(x, VAR3[i], 0.99),
+                       dwumianowy_test(x, VAR4[i], 0.99))
+  
+  kupiec[i, ] <- c(kupiec_test(x, VAR1[i], 0.01),
+                   kupiec_test(x, VAR2[i], 0.01),
+                   kupiec_test(x, VAR3[i], 0.01),
+                   kupiec_test(x, VAR4[i], 0.01))
+  
+  christoffersen[i, ] <- c(christoffersen_test(x, VAR1[i]),
+                           christoffersen_test(x, VAR2[i]),
+                           christoffersen_test(x, VAR3[i]),
+                           christoffersen_test(x, VAR4[i]))
+}
+
+w11 <- colMeans(dwumianowy)
+w21 <- colMeans(kupiec)
+w31 <- colMeans(christoffersen)
+
+wyniki <- data.frame(Test_dwumianowy = w11,
+                     Test_kupca = w21,
+                     Test_christoffersena = w31,
+                     row.names = c("Metoda historyczna z wagami", "Metoda EWMA", 
+                                   "Metoda GARCH(1,1)", "Metoda Monte Carlo"))
+```
+
+:::
+
+<hr>
+
+# Wyniki VaR
+
+::: {style="text-align: justify;"}
+Kolejny rozdział poświęcony jest porównaniu wartości VaR oraz ES, które zostały obliczone przy zastosowaniu wcześniej opisanych metod. Na poniższych wykresach przedstawione zostały bezwzględne wartości VaR i ES, które zostały przeliczone na wartości procentowe. Dodatkowo, na wykresach uwzględnione są stopy zwrotu, także przeliczone na wartości procentowe, przedstawiające wyniki na przestrzeni lat.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(2, 3), mar=c(2, 2, 2, 1))
+
+# Zamiana wartości na %
+VAR <- abs(VAR) * 100
+ES <- abs(ES) * 100
+VAR1 <- abs(VAR1) * 100
+ES1 <- abs(ES1) * 100
+VAR2 <- abs(VAR2) * 100
+ES2 <- abs(ES2) * 100
+VAR3 <- abs(VAR3) * 100
+ES3 <- abs(ES3) * 100
+VAR4 <- abs(VAR4) * 100
+ES4 <- abs(ES4) * 100
+
+# Pobranie wektora stóp zwrotu
+x <- 100 * stopy[501:3098]
+
+# Pobranie dat dla stóp zwrotu
+daty <- dane$Data
+daty <- daty[501:3098]
+daty <- as.Date(daty)
+
+# Wykres 1: Metoda historyczna
+plot(daty, x, type="l", col="gray95", main="Metoda historyczna", ylab="Wartość", xlab="Data",
+     ylim=c(min(x), max(ES)))
+lines(daty, ES, col="blue")
+lines(daty, VAR, type="l", col="red")
+grid(col="gray60")
+
+# Wykres 2: Metoda historyczna z wagami
+plot(daty, x, type="l", col="gray95", main="Metoda historyczna z wagami", ylab="Wartość", xlab="Data",
+     ylim=c(min(x), max(ES1)))
+lines(daty, ES1, col="blue")
+lines(daty, VAR1, type="l", col="red")
+grid(col="gray60")
+
+# Wykres 3: Metoda Monte Carlo
+plot(daty, x, type="l", col="gray95", main="Metoda Monte Carlo", ylab="Wartość", xlab="Data",
+     ylim=c(min(x), max(ES4)))
+lines(daty, ES4, col="blue")
+lines(daty, VAR4, type="l", col="red")
+grid(col="gray60")
+
+# Wykres 4: Metoda EWMA
+plot(daty, x, type="l", col="gray95", main="Metoda EWMA", ylab="Wartość", xlab="Data",
+     ylim=c(min(x), max(ES2)))
+lines(daty, ES2, col="blue")
+lines(daty, VAR2, type="l", col="red")
+grid(col="gray60")
+
+# Wykres 5: Metoda GARCH(1,1)
+plot(daty, x, type="l", col="gray95", main="Metoda GARCH(1,1)", ylab="Wartość", xlab="Data",
+     ylim=c(min(x), max(ES3)))
+lines(daty, ES3, col="blue")
+lines(daty, VAR3, type="l", col="red")
+grid(col="gray60")
+
+# Wykres 6: Pusta przestrzeń na legendę
+plot(1, type="n", axes=FALSE, xlab="", ylab="") # Pusty wykres
+legend("center", legend=c("VAR", "ES", "Stopy zwrotu"), col=c("red", "blue", "gray90"), lwd=2, bty="n", cex=1.5)
+
+```
+
+Analiza wykazała, że choć wartości są czasem zbliżone, w większości przypadków różnią się istotnie, co widać już na pierwszy rzut oka. Najbardziej podobne wydają się być wykresy wartości VaR i ES uzyskane metodą historyczną oraz metodą Monte Carlo. To dość oczywiste, ponieważ symulacja Monte Carlo nie uwzględnia zmienności, ani wag bardziej odległych wartości. W efekcie wykres tej metody jest bardziej zmienny, z pewnymi wahaniami, co wynika z losowości próbki wykorzystywanej do obliczenia każdej pojedynczej wartości.
+
+Z kolei metoda historyczna z wagami wydaje się być bardziej wiarygodnym źródłem informacji. Dzięki przypisanym wagom wartości VaR lepiej oddają rzeczywistą historię zmian. W sytuacji nagłych strat, zarówno VaR, jak i ES, reagują odpowiednio, a w okresach mniejszych wahań ich wartość stopniowo maleje, w przeciwieństwie do metody bez wag, gdzie pozostaje ona stała.
+
+Największe wahania występują w przypadku modeli uwzględniających zmienność stóp zwrotu tj. EWMA i GARCH(1,1). Model GARCH w szczególności prowadzi do skrajnych wartości VaR. W okresach niskiej zmienności, wartość VaR jest stosunkowo stabilna, jednak w czasach większych wahań następuje gwałtowna zmiana. Szczególnie widoczne jest to w okolicach roku 2022, kiedy to wybuch wojny w Ukrainie (luty 2022) zwiększył niepewność na rynkach, co znalazło odzwierciedlenie w zmienności modelowanej przez GARCH.
+:::
+
+<hr>
+
+# Wyniki testów wstecznych
+
+::: {style="text-align: justify;"}
+Kolejna tabela przedstawia wyniki testów statystycznych, które przeprowadzono dla wcześniej uzyskanych danych. Prezentowane dane do odsetek wartości VaR, które w danym teście zostały określone jako wyznaczone w prawidłowy sposób (np. przyjęcie hipotezy zerowej).
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+kable(wyniki)
+```
+
+Test Christoffersena nie wykazał istotnych różnic pomiędzy badanymi metodami. Wszystkie podejścia dały bardzo dobre wyniki, zgodnie z którymi VaR został poprawnie oszacowany w około 92% przypadków.
+
+Do innych wniosków prowadzą pozostałe dwa testy. W przypadku testu opartego na rozkładzie dwumianowym metoda historyczna z wagami oraz metoda Monte Carlo wykazały bardzo podobne rezultaty, niemal idealnie wyznaczając badane wartości. 
+
+Z drugiej strony metody uwzględniające zmienność tj. EWMA i GARCH(1,1) doprowadziły do dosyć przeciętych rezultatów. Jeszcze bardziej surowym sprawdzianem okazał się test Kupca, który pokazał, że VaR wyznaczony z wykorzystaniem modelu GARCH(1,1) był prawidłowy tylko w około 34% przypadków. W przypadku modelu EWMA wynik ten był nieco lepszy, osiągając 63%. Natomiast metoda historyczna z wagami oraz ta oparta na symulacji Monte Carlo ponownie wykazały bardzo podobne rezultaty na poziomie prawie 90%.
+:::
+
+<hr>
+
+# Podsumowanie
+
+::: {style="text-align: justify;"}
+Projekt pozwolił na zapoznanie się z różnymi metodami wyznaczania wartości VaR oraz ES. W trakcie analizy zastosowano pięć sposobów obliczania tych wartości: metodę historyczną, metodę historyczną z wagami, metodę Monte Carlo, metodę EWMA oraz model GARCH(1,1). Opracowane wartości zostały następnie zweryfikowane przy pomocy różnych testów wstecznych, do których należą: test dwumianowy, test Kupca oraz test Christoffersena, co umożliwiło ocenę jakości predykcji ryzyka.
+
+Przeprowadzone testy wykazały, że do najlepszych i najbardziej wiarygodnych wyników prowadzi metoda historyczna z wagami oraz metoda wykorzystująca symulację Monte Carlo. Ich wyniki są bardzo zbliżone do siebie i w zależności od wybranego testu jedna metoda wypada nieco lepiej od drugiej.
+
+Natomiast testy przeprowadzone dla metod opartych na zmienności tj. EWMA i GARCH(1,1), prowadzą do zupełnie innych wniosków. Choć metoda EWMA osiągnęła dobry wynik w teście Christoffersena, testy dwumianowy i Kupca wskazały na błędne wyznaczenie wartości VaR. Podobnie, model GARCH(1,1) uzyskał słabe wyniki w tych samych testach, zwłaszcza w teście Kupca, gdzie prawidłowe wyznaczenie VaR miało miejsce tylko w około 34% przypadków.
+
+Podsumowując, projekt dostarczył cennych wniosków na temat efektywności różnych metod wyznaczania i oceny ryzyka, wskazując na ich różne zastosowania w zależności od potrzeb analizy i charakterystyki danych.
+:::

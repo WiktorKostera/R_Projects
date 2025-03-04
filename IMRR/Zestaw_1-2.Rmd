@@ -1,0 +1,464 @@
+---
+title: "Zestaw 1-2"
+author: "Wiktor Kostera"
+date: "grudzień 2024"
+output: 
+  html_document:    
+    theme: bootstrap
+    toc: true
+    highlight: tango
+    toc_float: true
+    df_print: paged
+---
+
+```{css, echo=FALSE}
+pre {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+pre[class] {
+  max-height: 100px;
+  overflow-y: auto;
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+library(readxl)
+library(nortest)
+library(corrplot)
+```
+
+<hr>
+
+# Zestaw 1
+
+<hr>
+
+## Zadanie 1 i 2
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+usd_22_d <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+                     sheet = "USDPLN_dzienne_22")
+usd_22_d <- as.data.frame(usd_22_d)
+
+usd_22_t <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+           sheet = "USDPLN_tygodniowe_22")
+usd_22_t <- as.data.frame(usd_22_t)
+
+usd_m <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+                    sheet = "USDPLN_miesieczne")
+usd_m <- as.data.frame(usd_m)
+```
+
+```{r, message=FALSE, warning=FALSE}
+# stopy proste
+usd_22_d$Stopy_Proste <- c(NA, diff(usd_22_d$Zamkniecie) / head(usd_22_d$Zamkniecie, -1))
+usd_22_t$Stopy_Proste <- c(NA, diff(usd_22_t$Zamkniecie) / head(usd_22_t$Zamkniecie, -1))
+usd_m$Stopy_Proste <- c(NA, diff(usd_m$Zamkniecie) / head(usd_m$Zamkniecie, -1))
+
+# stopy logarytmiczne
+usd_22_d$Stopy_Logarytmiczne <- c(NA, log(tail(usd_22_d$Zamkniecie, -1) / head(usd_22_d$Zamkniecie, -1)))
+usd_22_t$Stopy_Logarytmiczne <- c(NA, log(tail(usd_22_t$Zamkniecie, -1) / head(usd_22_t$Zamkniecie, -1)))
+usd_m$Stopy_Logarytmiczne <- c(NA, log(tail(usd_m$Zamkniecie, -1) / head(usd_m$Zamkniecie, -1)))
+```
+
+<hr>
+
+## Zadanie 3
+
+Wykresy dla danych dziennych 2022 - 2024.
+
+```{r,, echo=FALSE, message=FALSE, warning=FALSE}
+plot(usd_22_d$Stopy_Proste, type="l", col="blue", main="Stopy proste", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_22_d$Stopy_Logarytmiczne, type="l", col="red", main="Stopy logarytmiczne", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_22_d$Stopy_Proste - usd_22_d$Stopy_Logarytmiczne, type="l", col="darkgreen", main="Różnica między stopami prostymi, a logarytmicznymi", ylab="Różnica", xlab="Indeks (dni")
+```
+
+Wykresy dla danych tygodniowych 2022 - 2024.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+plot(usd_22_t$Stopy_Proste, type="l", col="blue", main="Stopy proste", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_22_t$Stopy_Logarytmiczne, type="l", col="red", main="Stopy logarytmiczne", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_22_t$Stopy_Proste - usd_22_t$Stopy_Logarytmiczne, type="l", col="darkgreen", main="Różnica między stopami prostymi, a logarytmicznymi", ylab="Różnica", xlab="Indeks (dni")
+```
+
+Wykresy dla danych miesięcznych 2007 - 2024.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+plot(usd_m$Stopy_Proste, type="l", col="blue", main="Stopy proste", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_m$Stopy_Logarytmiczne, type="l", col="red", main="Stopy logarytmiczne", ylab="Stopa zwrotu", xlab="Indeks (dni")
+plot(usd_m$Stopy_Proste - usd_m$Stopy_Logarytmiczne, type="l", col="darkgreen", main="Różnica między stopami prostymi, a logarytmicznymi", ylab="Różnica", xlab="Indeks (dni")
+```
+
+Im szerszy okres notowań (miesięczne) tym większa amplituda stóp zwrotu.
+
+<hr>
+
+## Zadanie 4
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+wyniki <- data.frame(
+  Test = character(),
+  Dziennie = numeric(),
+  Tygodniowe = numeric(),
+  Miesieczne = numeric()
+)
+
+# Testy Shapiro-Wilka
+wyniki <- rbind(wyniki, data.frame(Test = "Shapiro-Wilk", 
+                                     Dziennie = shapiro.test(usd_22_d$Stopy_Logarytmiczne)$p.value, 
+                                     Tygodniowe = shapiro.test(usd_22_t$Stopy_Logarytmiczne)$p.value, 
+                                     Miesieczne = shapiro.test(usd_m$Stopy_Logarytmiczne)$p.value))
+
+# Testy Andersona-Darlinga
+wyniki <- rbind(wyniki, data.frame(Test = "Anderson-Darling", 
+                                     Dziennie = ad.test(usd_22_d$Stopy_Logarytmiczne)$p.value, 
+                                     Tygodniowe = ad.test(usd_22_t$Stopy_Logarytmiczne)$p.value, 
+                                     Miesieczne = ad.test(usd_m$Stopy_Logarytmiczne)$p.value))
+
+# Testy Kolmogorowa-Smirnowa
+wyniki <- rbind(wyniki, data.frame(Test = "Kolmogorov-Smirnov", 
+                                     Dziennie = ks.test(na.omit(usd_22_d$Stopy_Proste), "pnorm", mean(na.omit(usd_22_d$Stopy_Proste)), sd(na.omit(usd_22_d$Stopy_Proste)))$p.value, 
+                                     Tygodniowe = ks.test(na.omit(usd_22_t$Stopy_Proste), "pnorm", mean(na.omit(usd_22_t$Stopy_Proste)), sd(na.omit(usd_22_t$Stopy_Proste)))$p.value, 
+                                     Miesieczne = ks.test(na.omit(usd_m$Stopy_Proste), "pnorm", mean(na.omit(usd_m$Stopy_Proste)), sd(na.omit(usd_m$Stopy_Proste)))$p.value))
+
+options(scipen = 999)
+# Wyświetlenie wyników
+wyniki
+
+```
+
+Tylko test kołmogorowa-smirnova wykazał normalność rozkładu stóp zwrotu niezależnie od okresu notowań.
+
+<hr>
+
+## Zadanie 5
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+usd_d <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+                    sheet = "USDPLN_dzienne")
+
+usd_d <- as.data.frame(usd_d)
+
+usd_d$Stopy_Logarytmiczne <- c(NA, log(tail(usd_d$Zamkniecie, -1) / head(usd_d$Zamkniecie, -1)))
+
+stopy <- usd_d$Stopy_Logarytmiczne
+
+stopy <- as.numeric(na.omit(stopy))
+
+odch <- sd(stopy)
+srednia <- mean(stopy)
+liczba <- length(stopy)
+
+# EMPIRYCZNE
+
+# Obliczenia dla wartosci wiekszych od sredniej
+ew1 <- sum(stopy > srednia & stopy <= srednia + odch) 
+ew2 <- sum(stopy > srednia + odch & stopy <= srednia + 2 * odch) 
+ew3 <- sum(stopy > srednia + 2 * odch & stopy <= srednia + 3 * odch) 
+ew4 <- sum(stopy > srednia + 3 * odch & stopy <= srednia + 4 * odch) 
+ew5 <- sum(stopy > srednia + 4 * odch & stopy <= srednia + 5 * odch) 
+ew6 <- sum(stopy > srednia + 5 * odch) 
+
+# Obliczenia dla wartości mniejszych od sredniej
+em1 <- sum(stopy < srednia & stopy >= srednia - odch) 
+em2 <- sum(stopy < srednia - odch & stopy >= srednia - 2 * odch) 
+em3 <- sum(stopy < srednia - 2 * odch & stopy >= srednia - 3 * odch) 
+em4 <- sum(stopy < srednia - 3 * odch & stopy >= srednia - 4 * odch) 
+em5 <- sum(stopy < srednia - 4 * odch & stopy >= srednia - 5 * odch) 
+em6 <- sum(stopy < srednia - 5 * odch) 
+
+# Czestosci
+# <1 SD
+e1 <- (ew1 + em1) / liczba
+# 1-2 SD
+e2 <- (ew2 + em2) / liczba
+# 2-3 SD
+e3 <- (ew3 + em3) / liczba
+# 3-4 SD
+e4 <- (ew4 + em4) / liczba
+# 4-5 SD
+e5 <- (ew5 + em5) / liczba
+# >5 SD
+e6 <- (ew6 + em6) / liczba
+
+# TEORETYCZNE
+# <1 SD
+t1 <- 2 * (pnorm(srednia, srednia, odch) - pnorm(srednia - odch, srednia, odch))
+# 1-2 SD
+t2 <- 2 * (pnorm(srednia - odch, srednia, odch) - pnorm(srednia - 2 * odch, srednia, odch))
+# 2-3 SD
+t3 <- 2 * (pnorm(srednia - 2 * odch, srednia, odch) - pnorm(srednia - 3 * odch, srednia, odch))
+# 3-4 SD
+t4 <- 2 * (pnorm(srednia - 3 * odch, srednia, odch) - pnorm(srednia - 4 * odch, srednia, odch))
+# 4-5 SD
+t5 <- 2 * (pnorm(srednia - 4 * odch, srednia, odch) - pnorm(srednia - 5 * odch, srednia, odch))
+# >5 SD
+t6 <- 2 * (pnorm(srednia - 5 * odch, srednia, odch))
+
+symetria <- data.frame(Empiryczne_ujemne = c(em1, em2, em3, em4, em5, em6),
+                       Empiryczne_dodatnie = c(ew1, ew2, ew3, ew4, ew5, ew6),
+                       row.names = c("<1 SD", "1-2 SD", "2-3 SD", "3-4 SD", "4-5 SD", ">5 SD" ))
+
+wyniki_t_e <- data.frame(TEORETYCZNE = c(t1, t2, t3, t4, t5, t6),
+                         EMPIRYCZNE = c(e1, e2, e3, e4, e5, e6),
+                         row.names = c("<1 SD", "1-2 SD", "2-3 SD", "3-4 SD", "4-5 SD", ">5 SD" ))
+symetria
+```
+
+Jak można zauważyć zmiany nie są idealnie symetryczne natomiast nie można powiedzieć, że w zupełności są od siebie różne.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+wyniki_t_e
+```
+
+Na tej podstawie nie można powiedzieć, że stopy zwrotu mają rozkład normalny.
+
+<hr>
+
+## Zadanie 6
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(fitdistrplus)
+```
+
+Test zgodności z rozkładem t-studenta:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# rozklad t-studenta
+lista = list(df = 4,  m = srednia, s = odch)
+#tstudent <- fitdist(stopy, "t", start = lista)
+#tstudent
+ks.test(stopy, "pt", 521)
+```
+
+Test zgodności z rozkładem logistycznym:
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# rozklad logistyczny
+logistyczny <- fitdist(stopy, "logis")$estimate
+location <- logistyczny[1]
+scale <- logistyczny[2]
+ks.test(stopy, "plogis", location, scale)
+```
+
+Stopy zwrotu nie można opisać ani rozkładem normalnym, ani rozkładem t-Studenta, ani rozkładem logistycznym.
+
+<hr>
+
+# Zestaw 2
+
+<hr>
+
+## Zadanie 1
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+usd <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+                       sheet = "USDPLN_12_23")
+usd <- as.data.frame(usd)
+
+usd$Stopy_Logarytmiczne <- c(NA, log(tail(usd$Zamkniecie, -1) / head(usd$Zamkniecie, -1)))
+
+# ZADANIE 1
+
+x <- na.omit(usd$Stopy_Logarytmiczne)
+
+zmiennosc <- function(x, m) {
+  n <- length(x)
+  if (n < m) return(rep(NA, n))
+  wynik <- rep(NA, n)
+  for (i in m:n) {
+    przedzial <- x[(i - m + 1):i]  
+    wynik[i] <- sqrt((1 / (m - 1)) * sum((przedzial - mean(przedzial))^2))
+  }
+  return(wynik)
+}
+
+# Obliczanie zmienności dla różnych wartości m
+zmiennosc_m10 <- zmiennosc(x, 10)
+zmiennosc_m25 <- zmiennosc(x, 25)
+zmiennosc_m50 <- zmiennosc(x, 50)
+zmiennosc_m100 <- zmiennosc(x, 100)
+
+# Tworzenie wykresów
+plot(zmiennosc_m10, type = "l", col = "blue", lwd = 1,
+     xlab = "Indeks (dni)", ylab = "Zmienność", main = "Zmienność dla różnych m")
+lines(zmiennosc_m25, col = "red", lwd = 1)
+lines(zmiennosc_m50, col = "green", lwd = 1)
+lines(zmiennosc_m100, col = "purple", lwd = 1)
+legend("topright", legend = c("m = 10", "m = 25", "m = 50", "m = 100"),
+       col = c("blue", "red", "green", "purple"), lwd = 1)
+```
+
+Im większa wartość 'm' tym mniejsza zmienność stóp zwrotu.
+
+<hr>
+
+## Zadanie 2
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# ZADANIE 2
+
+zmiennosc_2 <- function(x, m) {
+  n <- length(x)
+  if (n < m) return(rep(NA, n))
+  wynik <- rep(NA, n)
+  for (i in m:n) {
+    przedzial <- x[(i - m + 1):i]  
+    wynik[i] <- sqrt((1 / m) * sum(przedzial^2))
+  }
+  return(wynik)
+}
+
+zmiennosc_m25_2 <- zmiennosc_2(x, 25)
+
+plot(zmiennosc_m25, type = "l", col = "blue", lwd = 1,
+     xlab = "Indeks (dni)", ylab = "Zmienność", main = "Zmienność dla różnych m")
+lines(zmiennosc_m25_2, col = "red", lwd = 1)
+legend("topright", legend = c("1 wzór", "2 wzór"),
+       col = c("blue", "red"), lwd = 1)
+```
+
+Wykresy nie są podobne w okresach gwałtownych zmian, co jest oczywiste, ponieważ w jednym wzorze uwzględniana jest średnia, a w drugim założenia jest równa 0.
+
+<hr>
+
+## Zadanie 3
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# ZADANIE 3
+
+ewma <- function(x, lambda) {
+  n <- length(x)
+  wynik <- rep(NA, n)
+  wynik[1] <- var(x[1:30]) # przyjmuje pierwsza wartosc jako wariancje 30 kolejnych
+  for (i in 2:n) {
+    wynik[i] <- lambda * wynik[i - 1] + (1 - lambda) * x[i - 1]^2
+  }
+  return(sqrt(wynik))
+}
+
+garch <- function(x, alpha, beta) {
+  n <- length(x)
+  gamma <- 1 - alpha - beta
+  wynik <- rep(NA, n)
+  Vl <- var(x)
+  wynik[1] <- var(x[1:30]) # przyjmuje pierwsza wartosc jako wariancje 30 kolejnych
+  for (i in 2:n) {
+    wynik[i] <- gamma * Vl + alpha * x[i - 1]^2 + beta * wynik[i - 1] 
+  }
+  return(sqrt(wynik))
+}
+
+zmiennosc_ewma <- ewma(x, 0.94)
+zmiennosc_garch <- garch(x, 0.15, 0.83) # wartosci alpha i beta z wykladu
+
+# Wykres zmienności EWMA oraz GARCH(1, 1)
+plot(zmiennosc_ewma, type = "l", col = "red", lwd = 1,
+     xlab = "Indeks (dni)", ylab = "Zmienność", main = "Model EWMA i GARCH(1, 1")
+lines(zmiennosc_garch, col = "blue", lwd = 1)
+legend("topright", legend = c("EWMA", "GARCH(1, 1)"),
+       col = c("red", "blue"), lwd = 1)
+```
+
+Wyniki są bardzo podobne do zmienności otrzymanej w poprzednim zadaniu. Można jednak zauważyć, że model GARCH(1, 1) jest dużo bardziej wrażliwy na nagłe zmiany w stopach zwrotu.
+
+<hr>
+
+## Zadanie 4
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# ZADANIE 4
+
+usd_21 <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/USDPLN.xlsx", 
+                  sheet = "USDPLN_21")
+usd_21 <- as.data.frame(usd_21)
+usd_21$Stopy_Logarytmiczne <- c(NA, log(tail(usd_21$Zamkniecie, -1) / head(usd_21$Zamkniecie, -1)))
+usd_21 <- usd_21[-1, ]
+
+eur_21 <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/EURPLN.xlsx", 
+                     sheet = "EURPLN_21")
+eur_21 <- as.data.frame(eur_21)
+eur_21$Stopy_Logarytmiczne <- c(NA, log(tail(eur_21$Zamkniecie, -1) / head(eur_21$Zamkniecie, -1)))
+eur_21 <- eur_21[-1, ]
+
+gbp_21 <- read_excel("/Users/wiktorkostera/Desktop/STUDIA/SEMESTR 5/Ilościowe miary ryzyka rynkowego/Dane/GBPPLN.xlsx", 
+                     sheet = "GBPPLN_21")
+gbp_21 <- as.data.frame(gbp_21)
+gbp_21$Stopy_Logarytmiczne <- c(NA, log(tail(gbp_21$Zamkniecie, -1) / head(gbp_21$Zamkniecie, -1)))
+gbp_21 <- gbp_21[-1, ]
+
+
+df_korelacje <- data.frame(usd_21$Stopy_Logarytmiczne, eur_21$Stopy_Logarytmiczne, gbp_21$Stopy_Logarytmiczne)
+korelacje <- cor(df_korelacje, method="pearson")
+round(korelacje, 2)
+corrplot(korelacje, method = "square", type = "upper") 
+```
+
+Widoczne są silne korelacje pomiędzy kursami walut.
+
+<hr>
+
+## Zadanie 5
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# ZADANIE 5
+
+# autokorelacje
+acf(usd_21$Stopy_Logarytmiczne, lag.max = 20, main = "Autokorelacja - USD")
+acf(eur_21$Stopy_Logarytmiczne, lag.max = 20, main = "Autokorelacja pierwszego rzędu - EUR")
+acf(gbp_21$Stopy_Logarytmiczne, lag.max = 20, main = "Autokorelacja pierwszego rzędu - GBP")
+```
+
+Autokorelacja nie występuje w przypadku dolara. Występuje jednak autokorelacja 11 rzędu w przypadku euro oraz 7 rzędu w przypadku funta.
+
+Korelacja/autokorelacja może zwiększać lub zmniejszać ryzyko w zależności od sytuacji. Silna korelacja zmniejsza ryzyko, ponieważ w łatwiejszy sposób można przewidzieć zachowania na rynku. Z drugiej strony brak autokorelacji zwiększa ryzyko, ponieważ brak przewidywalności prowadzi do większej niepewności.
+
+<hr>
+
+## Zadanie 6
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# ZADANIE 6
+
+ewma_85 <- ewma(eur_21$Stopy_Logarytmiczne, 0.85)
+ewma_90 <- ewma(eur_21$Stopy_Logarytmiczne, 0.9)
+ewma_94 <- ewma(eur_21$Stopy_Logarytmiczne, 0.94)
+ewma_95 <- ewma(eur_21$Stopy_Logarytmiczne, 0.95)
+ewma_99 <- ewma(eur_21$Stopy_Logarytmiczne, 0.99)
+
+plot(ewma_85, type = "l", col = "red", lwd = 1,
+     xlab = "Indeks (dni)", ylab = "Zmienność", main = "EWMA w zależności od parametru λ")
+lines(ewma_90, col = "blue", lwd = 1)
+lines(ewma_94, col = "darkgreen", lwd = 1)
+lines(ewma_95, col = "purple", lwd = 1)
+lines(ewma_99, col = "gray", lwd = 1)
+legend("topright", legend = c("λ = 0,85", "λ = 0,90","λ = 0,94", "λ = 0,95", "λ = 0,99"),
+       col = c("red", "blue", "darkgreen", "purple", "gray"), lwd = 1)
+```
+
+Im większa lambda, tym mniejsza obserwowana zmienność.
+
+<hr>
+
+## Zadanie 7
+
+W tym celu można obliczyć zmienność za pomocą pierwszego wzoru oraz metodą EWMA dla kilku wartości λ z określonego przedziału. Następnie wyniki te należy porównać z wartościami uzyskanymi za pomocą pierwszego wzoru i obliczyć np. MSE, aby wybrać najlepszą wartość λ.
+
+```{r, message=FALSE, warning=FALSE}
+zmiennosc_eur <- zmiennosc(eur_21$Stopy_Logarytmiczne, 25)
+lambda <- seq(0.80, 0.99, by = 0.01)
+bledy <- numeric(length(lambda))
+
+for(i in seq_along(lambda)) {
+  ewma_t <- ewma(eur_21$Stopy_Logarytmiczne, lambda[i])
+  
+  bledy[i] <- mean((ewma_t[26:length(eur_21$Stopy_Logarytmiczne)] - 
+                      zmiennosc_eur[26:length(eur_21$Stopy_Logarytmiczne)])^2, na.rm = TRUE)
+}
+
+lambda[which.min(bledy)]
+```
+
+W tym przypadku najlepiej sprawdziła się λ = 0,95.
